@@ -23,7 +23,7 @@
 
 **Files:** none created (repo metadata only)
 
-- [ ] **Step 1: Initialize the repo and commit the current verified state**
+- [x] **Step 1: Initialize the repo and commit the current verified state**
 
 ```bash
 cd "/Users/sven/Documents/Claude-Projekte/WU SPA Havard/dashboard_scaffold"
@@ -35,7 +35,7 @@ State as verified 2026-08-04: FRD v1.5, spike v1 run results in HANDOVER.
 GitHub remote + Pages deferred pending user go-ahead."
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 Run: `git log --oneline` → exactly one commit; `git status` → clean.
 
@@ -48,7 +48,7 @@ Run: `git log --oneline` → exactly one commit; `git status` → clean.
 
 Fixes over v1: every code path logs a verdict (v1 was silent for 1–4 trades); all REST responses read as text first, JSON-parsed defensively (v1 crashed on FMP's plain-text 402); checks target watchlist names, not AAPL. New checks: Alpaca WS auth+stream (the new Layer 1), Finnhub REST calendar coverage, FMP regime-residual including the *expected* DELL restriction, informational Finnhub WS symbol-restriction documenter.
 
-- [ ] **Step 1: Replace `public/spike.html`** with:
+- [x] **Step 1: Replace `public/spike.html`** with:
 
 ```html
 <!DOCTYPE html>
@@ -173,11 +173,11 @@ async function run() {
 </html>
 ```
 
-- [ ] **Step 2: Verify it serves and renders**
+- [x] **Step 2: Verify it serves and renders**
 
 Dev server already running → load `http://localhost:5173/spike.html`, confirm five input fields and the button render, no console errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add public/spike.html
@@ -199,7 +199,7 @@ for the FRD v1.6 provider pivot."
 **Interfaces:**
 - Produces: `openStream(tickers, {keyId, secret}, onTrade, onStatus, WS = WebSocket)` → `{ close(), lastTickAge() }`. Trade callback shape `{sym, p, v, t}` (t = ms epoch), status values `'CONNECTED' | 'DEGRADED' | 'DOWN'` — identical contract to `finnhubStream.openStream` so `main.js` can swap providers (NFR-4).
 
-- [ ] **Step 1: Write the failing tests** — create `test/adapters.test.js`:
+- [x] **Step 1: Write the failing tests** — create `test/adapters.test.js`:
 
 ```js
 import { test } from 'node:test';
@@ -255,11 +255,11 @@ test('alpaca: unexpected close → DEGRADED and reconnect socket opened', async 
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `node --test test/adapters.test.js` — Expected: FAIL, cannot find module `alpacaStream.js`.
 
-- [ ] **Step 3: Implement** — create `src/adapters/alpacaStream.js`:
+- [x] **Step 3: Implement** — create `src/adapters/alpacaStream.js`:
 
 ```js
 // Alpaca IEX WebSocket — Layer 1 primary since FRD v1.6 (C1: still single-venue, now IEX).
@@ -292,11 +292,11 @@ export function openStream(tickers, { keyId, secret }, onTrade, onStatus, WS = W
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `node --test test/adapters.test.js` — Expected: 3 pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/adapters/alpacaStream.js test/adapters.test.js
@@ -312,7 +312,7 @@ git commit -m "Implement FR-A15 stream adapter on Alpaca IEX WS (Layer 1 pivot, 
 **Interfaces:**
 - Produces: `regimeQuotes(apiKey, f = fetch)` → `{ spy: {price, changePct, ma50, ma200}, vix: number }`. Callers: future live wiring (FR-A1/A2 G1–G2 inputs). SPY 20-DMA still comes from Twelve Data daily bars (HANDOVER §10), unchanged.
 
-- [ ] **Step 1: Append failing tests** to `test/adapters.test.js`:
+- [x] **Step 1: Append failing tests** to `test/adapters.test.js`:
 
 ```js
 import { regimeQuotes } from '../src/adapters/fmp.js';
@@ -339,9 +339,9 @@ test('fmp: regimeQuotes surfaces provider error text', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `node --test test/adapters.test.js` → FAIL (`regimeQuotes` not exported).
+- [x] **Step 2: Run to verify failure** — `node --test test/adapters.test.js` → FAIL (`regimeQuotes` not exported).
 
-- [ ] **Step 3: Replace `src/adapters/fmp.js`**:
+- [x] **Step 3: Replace `src/adapters/fmp.js`**:
 
 ```js
 // FMP — REGIME INPUTS ONLY since FRD v1.6. Free tier for post-Aug-2025 keys is
@@ -360,9 +360,9 @@ export async function regimeQuotes(apiKey, f = fetch) {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass** — `node --test test/adapters.test.js` → all pass.
+- [x] **Step 4: Run to verify pass** — `node --test test/adapters.test.js` → all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/adapters/fmp.js test/adapters.test.js
@@ -378,7 +378,7 @@ git commit -m "Shrink FMP adapter to regime inputs (FR-A1/A2); watchlist quotes/
 **Interfaces:**
 - Produces: `nextEarningsMap(tickers, apiKey, f = fetch, today = new Date())` → `{ [ticker]: 'YYYY-MM-DD' | null }`. `null` = unknown → caller badges the name (FRD 4.6 fail-safe). One call covers the whole watchlist (vs. v1's per-name FMP calls).
 
-- [ ] **Step 1: Append failing tests**:
+- [x] **Step 1: Append failing tests**:
 
 ```js
 import { nextEarningsMap } from '../src/adapters/finnhub.js';
@@ -398,9 +398,9 @@ test('finnhub: nextEarningsMap surfaces HTTP errors', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `node --test test/adapters.test.js` → FAIL (module missing).
+- [x] **Step 2: Run to verify failure** — `node --test test/adapters.test.js` → FAIL (module missing).
 
-- [ ] **Step 3: Create `src/adapters/finnhub.js`**:
+- [x] **Step 3: Create `src/adapters/finnhub.js`**:
 
 ```js
 // Finnhub REST earnings calendar (FR-A7 since FRD v1.6). Browser CORS verified 2026-08-04
@@ -420,9 +420,9 @@ export async function nextEarningsMap(tickers, apiKey, f = fetch, today = new Da
 }
 ```
 
-- [ ] **Step 4: Run to verify pass** — `node --test test/adapters.test.js` → all pass.
+- [x] **Step 4: Run to verify pass** — `node --test test/adapters.test.js` → all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/adapters/finnhub.js test/adapters.test.js
@@ -438,7 +438,7 @@ git commit -m "Implement FR-A7 earnings via Finnhub REST calendar (one call, fai
 **Interfaces:**
 - Produces: `quotes(symbols, apiKey, f = fetch)` → `{ [symbol]: {price, changePct, volume, avgVolume} | null }`. Callers must chunk to ≤8 symbols per call through the FR-A5 queue (8 credits/min — a symbol costs one credit even inside a batch request).
 
-- [ ] **Step 1: Append failing tests**:
+- [x] **Step 1: Append failing tests**:
 
 ```js
 import { quotes } from '../src/adapters/twelvedata.js';
@@ -459,9 +459,9 @@ test('twelvedata: quotes handles single-symbol unwrapped response', async () => 
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `node --test test/adapters.test.js` → FAIL (`quotes` not exported).
+- [x] **Step 2: Run to verify failure** — `node --test test/adapters.test.js` → FAIL (`quotes` not exported).
 
-- [ ] **Step 3: Append to `src/adapters/twelvedata.js`**:
+- [x] **Step 3: Append to `src/adapters/twelvedata.js`**:
 
 ```js
 // Overview quotes since FRD v1.6 (FMP free tier can't serve watchlist names, C9).
@@ -479,9 +479,9 @@ export async function quotes(symbols, apiKey, f = fetch) {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass** — `node --test test/adapters.test.js` → all pass, then full suite: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/adapters.test.js` → 25 + new all green.
+- [x] **Step 4: Run to verify pass** — `node --test test/adapters.test.js` → all pass, then full suite: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/adapters.test.js` → 25 + new all green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/adapters/twelvedata.js test/adapters.test.js
@@ -495,9 +495,9 @@ git commit -m "Add Twelve Data quote batch for FR-A1 overview (chunked 8/min via
 
 **Interfaces:** field ids consumed by future live wiring: `#key-fmp`, `#key-td`, `#key-alpaca-id`, `#key-alpaca-secret`, `#key-fh`, `#key-or`, `#key-nd` (verify current ids in `index.html` first and keep the existing naming scheme if it differs).
 
-- [ ] **Step 1:** In the keys panel, replace the single Finnhub field with an Alpaca key-ID + secret pair, and relabel Finnhub as "Finnhub key (earnings)". Keep FMP, Twelve Data, OpenRouter, newsdata.io fields unchanged. Placeholder texts: `Alpaca key ID (stream)`, `Alpaca secret`, `Finnhub key (earnings)`.
-- [ ] **Step 2: Verify** — `npm run build` green; load `http://localhost:5173/`, demo mode still boots, six/seven key fields render.
-- [ ] **Step 3: Commit** — `git add index.html && git commit -m "Key panel: Alpaca pair for Layer 1 stream, Finnhub relabeled to earnings role"`
+- [x] **Step 1:** In the keys panel, replace the single Finnhub field with an Alpaca key-ID + secret pair, and relabel Finnhub as "Finnhub key (earnings)". Keep FMP, Twelve Data, OpenRouter, newsdata.io fields unchanged. Placeholder texts: `Alpaca key ID (stream)`, `Alpaca secret`, `Finnhub key (earnings)`.
+- [x] **Step 2: Verify** — `npm run build` green; load `http://localhost:5173/`, demo mode still boots, six/seven key fields render.
+- [x] **Step 3: Commit** — `git add index.html && git commit -m "Key panel: Alpaca pair for Layer 1 stream, Finnhub relabeled to earnings role"`
 
 ### Task 7: FRD v1.6 amendment
 
@@ -506,12 +506,12 @@ git commit -m "Add Twelve Data quote batch for FR-A1 overview (chunked 8/min via
 
 Spec-code truth (HANDOVER §8.2): same phase as the code changes. Edits, all justified by the 2026-08-04 spike evidence:
 
-- [ ] **Step 1: §6.1 Layer 1** — replace Finnhub with Alpaca IEX WS (free tier: real-time IEX trades, browser WS verified; 30-symbol subscription cap fits 20 names + SPY). State Finnhub WS was dropped because its free tier streams only a restricted popular-symbol set (verified: AAPL/TSLA stream, SPY/MU/DELL silent, no error frames).
-- [ ] **Step 2: §6.1 Layer 3 + §6.2 source table** — FMP row: regime-only (SPY, ^VIX), note symbol restriction + dead batch/legacy endpoints for post-Aug-2025 keys. Finnhub row: REST `/calendar/earnings` (CORS verified from browser 2026-08-04, correcting the v1.5 assumption), WS deprecated. Alpaca row: promoted from "documented alternative" to Layer 1 primary. Twelve Data row: add `/quote` for the overview table (chunked ≤8 symbols/call through the FR-A5 queue; ~21 credits/refresh inside the 800/day budget).
-- [ ] **Step 3: §6.3 register** — C1: reword to name IEX as the single venue (Alpaca). Add **C9**: "Free-tier symbol restrictions (discovered 2026-08-04): FMP serves only a popular-symbol subset on new keys (watchlist names 402) and Finnhub WS streams only that subset. Consequence: FMP demoted to regime inputs; Layer 1 moved to Alpaca; overview quotes moved to Twelve Data, making the initial table fill progressive (~3 min for 20 names at 8 credits/min) rather than 3 REST calls. Mitigation: live stream overtakes REST quotes within seconds during market hours; Phase 2 exit: any paid tier."
-- [ ] **Step 4: §7 FR text** — FR-A1: overview quotes via Twelve Data chunked batches + FMP regime pair; progressive fill, regime banner within 3s (NFR-2 unchanged, table fills as chunks land). FR-A7: earnings via one Finnhub calendar call. FR-A15: Alpaca WS, unchanged behavior otherwise.
-- [ ] **Step 5: §11 change log** — add v1.6 entry naming the spike as trigger, the three provider moves, C9, and the FR-A1 fill-behavior change.
-- [ ] **Step 6: Commit** — `git add docs/FRD.md && git commit -m "FRD v1.6: provider pivot after free-tier spike (C9; FR-A1/A7/A15 amended)"`
+- [x] **Step 1: §6.1 Layer 1** — replace Finnhub with Alpaca IEX WS (free tier: real-time IEX trades, browser WS verified; 30-symbol subscription cap fits 20 names + SPY). State Finnhub WS was dropped because its free tier streams only a restricted popular-symbol set (verified: AAPL/TSLA stream, SPY/MU/DELL silent, no error frames).
+- [x] **Step 2: §6.1 Layer 3 + §6.2 source table** — FMP row: regime-only (SPY, ^VIX), note symbol restriction + dead batch/legacy endpoints for post-Aug-2025 keys. Finnhub row: REST `/calendar/earnings` (CORS verified from browser 2026-08-04, correcting the v1.5 assumption), WS deprecated. Alpaca row: promoted from "documented alternative" to Layer 1 primary. Twelve Data row: add `/quote` for the overview table (chunked ≤8 symbols/call through the FR-A5 queue; ~21 credits/refresh inside the 800/day budget).
+- [x] **Step 3: §6.3 register** — C1: reword to name IEX as the single venue (Alpaca). Add **C9**: "Free-tier symbol restrictions (discovered 2026-08-04): FMP serves only a popular-symbol subset on new keys (watchlist names 402) and Finnhub WS streams only that subset. Consequence: FMP demoted to regime inputs; Layer 1 moved to Alpaca; overview quotes moved to Twelve Data, making the initial table fill progressive (~3 min for 20 names at 8 credits/min) rather than 3 REST calls. Mitigation: live stream overtakes REST quotes within seconds during market hours; Phase 2 exit: any paid tier."
+- [x] **Step 4: §7 FR text** — FR-A1: overview quotes via Twelve Data chunked batches + FMP regime pair; progressive fill, regime banner within 3s (NFR-2 unchanged, table fills as chunks land). FR-A7: earnings via one Finnhub calendar call. FR-A15: Alpaca WS, unchanged behavior otherwise.
+- [x] **Step 5: §11 change log** — add v1.6 entry naming the spike as trigger, the three provider moves, C9, and the FR-A1 fill-behavior change.
+- [x] **Step 6: Commit** — `git add docs/FRD.md && git commit -m "FRD v1.6: provider pivot after free-tier spike (C9; FR-A1/A7/A15 amended)"`
 
 ### Task 8: HANDOVER + README refresh & final verification
 
@@ -519,9 +519,9 @@ Spec-code truth (HANDOVER §8.2): same phase as the code changes. Edits, all jus
 - Modify: `HANDOVER.md` (§5 build state + spike status, §7 keys incl. Alpaca pair, §10 add symbol-restriction gotcha)
 - Modify: `README.md` (status checklist)
 
-- [ ] **Step 1:** Update HANDOVER §5 (spike v1 findings + v2 status), §7 (Alpaca key pair; `.env.example` exists; never `VITE_` prefix), §10 (add: "Free-tier symbol restrictions: FMP + Finnhub WS serve only popular symbols on new keys — verify with watchlist names, not AAPL").
-- [ ] **Step 2:** Full verification: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/adapters.test.js` all green; `npm run build` green; demo mode boots in browser.
-- [ ] **Step 3: Commit** — `git add HANDOVER.md README.md && git commit -m "Docs: record provider pivot and spike v2 protocol"`
+- [x] **Step 1:** Update HANDOVER §5 (spike v1 findings + v2 status), §7 (Alpaca key pair; `.env.example` exists; never `VITE_` prefix), §10 (add: "Free-tier symbol restrictions: FMP + Finnhub WS serve only popular symbols on new keys — verify with watchlist names, not AAPL").
+- [x] **Step 2:** Full verification: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/adapters.test.js` all green; `npm run build` green; demo mode boots in browser.
+- [x] **Step 3: Commit** — `git add HANDOVER.md README.md && git commit -m "Docs: record provider pivot and spike v2 protocol"`
 
 ---
 
