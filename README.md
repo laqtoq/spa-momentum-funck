@@ -24,6 +24,8 @@ pivot recorded as FRD compromise C9.)
 - `public/watchlist.json`, `public/key_dates.json` — versioned screen outputs (FR-A14)
 
 ## Status
-- [x] Engine (20 tests) · [x] Core (5 tests) · [x] Adapters (9 tests) · [x] Demo mode · [x] Vite build
-- [x] Provider pivot (FRD v1.6, C9) · [ ] Spike v2 pass with Alpaca keys
-- [ ] Live wiring behind keys (adapters ready) · [ ] Position monitor UI · [ ] Modules B/C UI
+- [x] Engine (20 tests) · [x] Core (5 tests) · [x] Adapters (9 tests) · [x] Live orchestrator (9 tests) · [x] Demo mode · [x] Vite build
+- [x] Provider pivot (FRD v1.6, C9) · [x] Spike v2 passed with real keys (2026-08-04)
+- [x] Live wiring behind keys (FR-A15–A18; market-hours click-through pending) · [ ] Position monitor UI · [ ] Modules B/C UI
+
+Tests: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/adapters.test.js test/live.test.js`
