@@ -50,7 +50,7 @@ If `docs/FRD.md` is missing, it was delivered as `FRD_momentum_runway.md` alongs
 
 ## 4. Repository landscape
 
-- **This repo** — the deliverable. Built on the course Vite template. Deploys to GitHub Pages via `.github/workflows/deploy.yml` on every push to `main` (`vite.config.js` already uses `base:'./'` for the Pages subpath).
+- **This repo** — the deliverable: **github.com/laqtoq/spa-momentum-funck** (public since 2026-08-04), live at **https://laqtoq.github.io/spa-momentum-funck/** (spike: `/spike.html`). Built on the course Vite template. Deploys to GitHub Pages via `.github/workflows/deploy.yml` on every push to `main` (`vite.config.js` uses `base:'./'` for the Pages subpath); deploy verified green.
 - **github.com/laqtoq/Spa-Funck** — the student's Repo 1/3 from class (ticker form, Twelve Data fetch, FMP profile, NewsAPI, OpenRouter note). This scaffold descends from it; do not modify Spa-Funck.
 - **github.com/laqtoq/genai-vienna-funck-day2** — the **instructor's course repo** (~3k files, public): all slide decks + taught R scripts. Course material is a **toolbox, not a constraint** (explicit user instruction), but reusing it where it fits is graded well. Most relevant:
   - `lessons/day2-datascience/scripts/A_data_prep.R` (quantmod/Yahoo bulk history), `E_rolling_correlation.R` (TTR::runCor — our cluster method), `F_rolling_metrics.R` (rolling Sharpe/beta — adopted as KPIs)
@@ -114,6 +114,6 @@ Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost
 - [ ] R port of screening pipeline committed (`screen/` folder) + rerun close to submission for a fresh watchlist
 - [ ] FRD human-edited (name, voice pass, thresholds sanity: VIX 30, 18:00 cutoff, 450% β-cap)
 - [ ] Executive summary (1 p.) · [ ] IC deck (CO-STAR skeleton; slides: thesis → risk math → Knight safeguards → live demo → optimization-governance → challenge Q&A incl. "what if hit rate is 15%?" and "why not unlevered momentum basket?") · [ ] Narrated demo recording (record on localhost for fresh NewsAPI headlines)
-- [ ] Repo public, Pages green, README current
+- [x] Repo public (laqtoq/spa-momentum-funck), Pages green (verified 2026-08-04) · [ ] README kept current through remaining phases
 - [ ] **AI conversation exports attached**: the claude.ai project chats AND Claude Code session transcripts
 - [ ] Verify CPI dates in key_dates.json · [ ] Optional: verify hagll.com pre-module cross-references in final text

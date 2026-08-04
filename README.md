@@ -9,7 +9,7 @@ enter free-tier keys in the app to go live.
     npm run build        # static dist/ for GitHub Pages (existing Actions workflow deploys on push)
 
 ## First: run spike v2
-Open `public/spike.html` (locally or at `https://<user>.github.io/<repo>/spike.html`), paste your
+Open `public/spike.html` (locally or at https://laqtoq.github.io/spa-momentum-funck/spike.html), paste your
 Alpaca key-ID + secret / Twelve Data / FMP / Finnhub keys, press Run. It verifies the FRD v1.6
 provider set: Alpaca IEX streaming, Twelve Data depth + quotes on watchlist names, FMP regime
 residual (SPY/^VIX), Finnhub earnings-calendar coverage. Best run 15:30–22:00 CET.
