@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Momentum with Runway — Signal Desk</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<header>
+  <div class="brand">MOMENTUM<span>/</span>RUNWAY</div>
+  <div id="regime" class="pill">REGIME —</div>
+  <div id="session" class="pill">SESSION —</div>
+  <div id="stream" class="pill">STREAM —</div>
+  <div id="budget" class="pill dim">API —</div>
+</header>
+<div class="notice">Signals and simulations only — not financial advice. No automated execution. <span id="mode"></span></div>
+<main>
+  <section id="keys" class="panel">
+    <h2>Keys <small>runtime only, never stored server-side</small></h2>
+    <div class="keygrid">
+      <input id="k_fmp" placeholder="FMP key" /><input id="k_td" placeholder="Twelve Data key" />
+      <input id="k_fh" placeholder="Finnhub key" /><input id="k_or" placeholder="OpenRouter key" />
+      <input id="k_nd" placeholder="newsdata.io key" /><button id="go">Start live</button>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Watchlist <small id="screendate"></small></h2>
+    <table id="overview"><thead><tr>
+      <th>Name</th><th class="num">Last</th><th class="num">Day%</th><th>Trend</th>
+      <th>Runway</th><th>β</th><th>Cl.</th><th>Earnings</th><th>State</th>
+    </tr></thead><tbody></tbody></table>
+    <div class="prov">Prices: <span id="prov-price">DEMO</span> · Reference: <span id="prov-ref">DEMO</span></div>
+  </section>
+  <section class="cols">
+    <div class="panel" id="drill"><h2>Drill-down</h2><div id="drillbody" class="dim">Select a name.</div></div>
+    <div class="panel" id="risk"><h2>Risk / Allocator</h2><div id="riskbody"></div></div>
+  </section>
+  <section class="panel"><h2>Desk note</h2><div id="note" class="dim">Provide an OpenRouter key for live notes; demo shows structure.</div></section>
+</main>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

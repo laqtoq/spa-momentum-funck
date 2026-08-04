@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Data Spike — free-tier verification</title>
+<style>
+body{font:14px/1.5 ui-monospace,Menlo,monospace;background:#14171C;color:#E8EAED;max-width:760px;margin:30px auto;padding:0 16px}
+input{background:#1B2027;border:1px solid #262D36;color:#E8EAED;padding:7px;border-radius:4px;width:100%;margin:4px 0}
+button{background:#3FB68B;border:none;color:#0c211a;font-weight:700;padding:9px 16px;border-radius:4px;cursor:pointer;margin-top:8px}
+.pass{color:#3FB68B}.fail{color:#D08048}.warn{color:#C9A961}
+#log div{border-bottom:1px solid #262D36;padding:6px 0}
+</style></head>
+<body>
+<h2>Free-tier data spike</h2>
+<p>Verifies the three FRD assumptions from <em>this</em> browser. Keys are used in-page only, never stored or sent anywhere except the providers themselves.</p>
+<input id="fh" placeholder="Finnhub key (free)">
+<input id="td" placeholder="Twelve Data key (free)">
+<input id="fmp" placeholder="FMP key (free)">
+<button onclick="run()">Run all checks</button>
+<div id="log"></div>
+<script>
+const log = (msg, cls='') => { const d = document.createElement('div'); d.className = cls; d.textContent = msg; document.getElementById('log').appendChild(d); };
+
+async function run() {
+  document.getElementById('log').innerHTML = '';
+  const fh = document.getElementById('fh').value.trim();
+  const td = document.getElementById('td').value.trim();
+  const fmp = document.getElementById('fmp').value.trim();
+
+  // ---- CHECK 1: Finnhub WebSocket from a browser page (C1 / FR-A15) ----
+  if (fh) {
+    log('1) Finnhub WS: connecting…');
+    await new Promise(done => {
+      let trades = 0, opened = false;
+      const ws = new WebSocket('wss://ws.finnhub.io?token=' + fh);
+      const timer = setTimeout(() => {
+        if (!opened) log('1) FAIL — socket never opened (key? network?)', 'fail');
+        else if (trades === 0) log('1) PASS(conditional) — socket open + subscribed, 0 trades in 20s. If US market is CLOSED right now this is expected; rerun 15:30–22:00 CET.', 'warn');
+        ws.close(); done();
+      }, 20000);
+      ws.onopen = () => { opened = true; log('   socket open, subscribing DELL, MU, SPY…');
+        ['DELL','MU','SPY'].forEach(s => ws.send(JSON.stringify({type:'subscribe',symbol:s}))); };
+      ws.onmessage = ev => { const m = JSON.parse(ev.data);
+        if (m.type === 'trade') { trades += m.data.length;
+          if (trades >= 5) { clearTimeout(timer); log(`1) PASS — live trades streaming (${trades} ticks). Layer 1 confirmed.`, 'pass'); ws.close(); done(); } } };
+      ws.onerror = () => {};
+    });
+  } else log('1) SKIPPED — no Finnhub key', 'warn');
+
+  // ---- CHECK 2: Twelve Data 5-minute history depth (C5 / FR-B2) ----
+  if (td) {
+    const past = new Date(Date.now() - 60*24*3600*1000).toISOString().slice(0,10); // ~60 days ago
+    try {
+      const r = await fetch(`https://api.twelvedata.com/time_series?symbol=AAPL&interval=5min&start_date=${past}&end_date=${past} 23:59:00&outputsize=200&timezone=UTC&apikey=${td}`);
+      const js = await r.json();
+      if (js.values?.length >= 70) log(`2) PASS — ${js.values.length} 5m bars for ${past} (60 days back). Simulator depth OK at least 60d.`, 'pass');
+      else if (js.values?.length) log(`2) PARTIAL — only ${js.values.length} bars for ${past}: `+JSON.stringify(js.values[0]), 'warn');
+      else log('2) FAIL — ' + (js.message || JSON.stringify(js).slice(0,200)), 'fail');
+    } catch (e) { log('2) FAIL — ' + e + ' (if CORS error: Twelve Data browser access broken)', 'fail'); }
+  } else log('2) SKIPPED — no Twelve Data key', 'warn');
+
+  // ---- CHECK 3: FMP batch-quote + earnings on the free key (FR-A1/A7) ----
+  if (fmp) {
+    try {
+      const r = await fetch(`https://financialmodelingprep.com/stable/batch-quote?symbols=DELL,MU,SPY&apikey=${fmp}`);
+      const js = await r.json();
+      if (Array.isArray(js) && js[0]?.priceAvg50) log(`3a) PASS — batch-quote OK, incl. 50DMA (DELL ma50=${js[0].priceAvg50}).`, 'pass');
+      else log('3a) FAIL/LIMITED — response: ' + JSON.stringify(js).slice(0,200), 'fail');
+    } catch (e) { log('3a) FAIL — ' + e, 'fail'); }
+    try {
+      const r = await fetch(`https://financialmodelingprep.com/stable/earnings?symbol=MU&limit=4&apikey=${fmp}`);
+      const js = await r.json();
+      if (Array.isArray(js) && js[0]?.date) log(`3b) PASS — earnings endpoint OK (next MU dates: ${js.map(x=>x.date).join(', ')}).`, 'pass');
+      else log('3b) FAIL/LIMITED — ' + JSON.stringify(js).slice(0,200), 'fail');
+    } catch (e) { log('3b) FAIL — ' + e, 'fail'); }
+  } else log('3) SKIPPED — no FMP key', 'warn');
+
+  log('Done. Screenshot this and report results back.');
+}
+</script>
+</body>
+</html>

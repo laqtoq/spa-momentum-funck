@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.DS_Store
+node_modules
+dist
+.claude
+
+# Local API keys. Never commit these — this repo is public.
+.env
+.env.*
+!.env.example

@@ -1,0 +1,240 @@
+{
+  "screening_date": "2026-08-04",
+  "screen_version": "provisional-v1.5 (pending FRD approval)",
+  "thresholds": {
+    "S2_min_close_usd": 20,
+    "S3_atr_floor_pct": "adaptive max(2.0, liquid-universe median) = 3.28",
+    "S4_min_dollar_vol_usd": 500000000.0,
+    "S7_sector_cap": 6,
+    "cluster_corr_threshold": 0.7,
+    "beta_window_days": 60,
+    "momentum_window_days": 126
+  },
+  "flags": [
+    "S3 and S7 are provisional pending FRD v1.5 approval",
+    "SNDK and MRVL carry 60d betas > 5: the allocator scales full-size entries down to the beta cap (~46% of base size), per FR-D4",
+    "8 of 20 names share cluster C2 (cross-sector AI-infrastructure trade); Module D cluster rule constrains concurrency"
+  ],
+  "names": [
+    {
+      "ticker": "DELL",
+      "sector": "Information Technology",
+      "bias": "long",
+      "cluster": "C1",
+      "beta_60d": 2.89,
+      "atr_pct_14d": 7.56,
+      "ret_126d_pct": 296.0,
+      "close_at_screen": 469.62,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "SNDK",
+      "sector": "Information Technology",
+      "bias": "short",
+      "cluster": "C2",
+      "beta_60d": 5.2,
+      "atr_pct_14d": 13.67,
+      "ret_126d_pct": 114.9,
+      "close_at_screen": 1429.45,
+      "funnel_flag": true
+    },
+    {
+      "ticker": "MRVL",
+      "sector": "Information Technology",
+      "bias": "short",
+      "cluster": "C3",
+      "beta_60d": 5.15,
+      "atr_pct_14d": 9.09,
+      "ret_126d_pct": 180.1,
+      "close_at_screen": 220.13,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "MU",
+      "sector": "Information Technology",
+      "bias": "short",
+      "cluster": "C2",
+      "beta_60d": 4.79,
+      "atr_pct_14d": 9.83,
+      "ret_126d_pct": 103.9,
+      "close_at_screen": 892.01,
+      "funnel_flag": true
+    },
+    {
+      "ticker": "WDC",
+      "sector": "Information Technology",
+      "bias": "short",
+      "cluster": "C2",
+      "beta_60d": 3.97,
+      "atr_pct_14d": 9.35,
+      "ret_126d_pct": 105.2,
+      "close_at_screen": 554.21,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "LITE",
+      "sector": "Information Technology",
+      "bias": "long",
+      "cluster": "C2",
+      "beta_60d": 3.45,
+      "atr_pct_14d": 9.22,
+      "ret_126d_pct": 103.1,
+      "close_at_screen": 859.91,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "VRT",
+      "sector": "Industrials",
+      "bias": "short",
+      "cluster": "C2",
+      "beta_60d": 3.09,
+      "atr_pct_14d": 7.91,
+      "ret_126d_pct": 43.3,
+      "close_at_screen": 272.23,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "FIX",
+      "sector": "Industrials",
+      "bias": "short",
+      "cluster": "C2",
+      "beta_60d": 2.68,
+      "atr_pct_14d": 6.62,
+      "ret_126d_pct": 51.8,
+      "close_at_screen": 1783.53,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "HUM",
+      "sector": "Health Care",
+      "bias": "short",
+      "cluster": "C4",
+      "beta_60d": 0.4,
+      "atr_pct_14d": 4.23,
+      "ret_126d_pct": 95.6,
+      "close_at_screen": 363.38,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "COIN",
+      "sector": "Financials",
+      "bias": "short",
+      "cluster": "C5",
+      "beta_60d": 2.04,
+      "atr_pct_14d": 6.87,
+      "ret_126d_pct": -19.3,
+      "close_at_screen": 151.63,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "GEV",
+      "sector": "Industrials",
+      "bias": "short",
+      "cluster": "C2",
+      "beta_60d": 2.1,
+      "atr_pct_14d": 6.17,
+      "ret_126d_pct": 34.4,
+      "close_at_screen": 1013.88,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "HOOD",
+      "sector": "Financials",
+      "bias": "short",
+      "cluster": "C6",
+      "beta_60d": 1.99,
+      "atr_pct_14d": 6.89,
+      "ret_126d_pct": 3.6,
+      "close_at_screen": 93.11,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "PWR",
+      "sector": "Industrials",
+      "bias": "long",
+      "cluster": "C2",
+      "beta_60d": 2.13,
+      "atr_pct_14d": 4.76,
+      "ret_126d_pct": 47.1,
+      "close_at_screen": 702.64,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "CVNA",
+      "sector": "Consumer Discretionary",
+      "bias": "long",
+      "cluster": "C7",
+      "beta_60d": 1.79,
+      "atr_pct_14d": 6.13,
+      "ret_126d_pct": -16.1,
+      "close_at_screen": 68.42,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "VLO",
+      "sector": "Energy",
+      "bias": "long",
+      "cluster": "C8",
+      "beta_60d": -0.41,
+      "atr_pct_14d": 3.57,
+      "ret_126d_pct": 73.3,
+      "close_at_screen": 307.81,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "CAT",
+      "sector": "Industrials",
+      "bias": "short",
+      "cluster": "C2",
+      "beta_60d": 2.09,
+      "atr_pct_14d": 5.14,
+      "ret_126d_pct": 28.1,
+      "close_at_screen": 881.87,
+      "funnel_flag": true
+    },
+    {
+      "ticker": "TSLA",
+      "sector": "Consumer Discretionary",
+      "bias": "short",
+      "cluster": "C9",
+      "beta_60d": 2.9,
+      "atr_pct_14d": 4.89,
+      "ret_126d_pct": -22.8,
+      "close_at_screen": 325.6,
+      "funnel_flag": true
+    },
+    {
+      "ticker": "VST",
+      "sector": "Utilities",
+      "bias": "short",
+      "cluster": "C10",
+      "beta_60d": 1.34,
+      "atr_pct_14d": 5.58,
+      "ret_126d_pct": -6.3,
+      "close_at_screen": 144.17,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "BSX",
+      "sector": "Health Care",
+      "bias": "long",
+      "cluster": "C11",
+      "beta_60d": -0.12,
+      "atr_pct_14d": 3.55,
+      "ret_126d_pct": -46.9,
+      "close_at_screen": 48.8,
+      "funnel_flag": false
+    },
+    {
+      "ticker": "ETN",
+      "sector": "Industrials",
+      "bias": "long",
+      "cluster": "C2",
+      "beta_60d": 2.42,
+      "atr_pct_14d": 4.52,
+      "ret_126d_pct": 23.7,
+      "close_at_screen": 441.9,
+      "funnel_flag": false
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "updated": "2026-08-04",
+  "note": "FOMC dates from published 2026 schedule; CPI dates TO VERIFY at next screen; earnings fetched live via FMP (FR-A7)",
+  "dates": [
+    {
+      "date": "2026-09-16",
+      "event": "FOMC rate decision",
+      "risk": "high"
+    },
+    {
+      "date": "2026-10-28",
+      "event": "FOMC rate decision",
+      "risk": "high"
+    },
+    {
+      "date": "2026-12-09",
+      "event": "FOMC rate decision",
+      "risk": "high"
+    }
+  ]
+}

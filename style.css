@@ -1,0 +1,44 @@
+/* Tokens — graphite terminal, restrained duotone signals, tabular numerals as the aesthetic */
+:root{
+  --bg:#14171C; --panel:#1B2027; --edge:#262D36; --ink:#E8EAED; --muted:#8A93A0;
+  --long:#3FB68B; --short:#D08048; --armed:#C9A961; --idle:#4A5560;
+  --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;gap:10px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--edge)}
+.brand{font-weight:700;letter-spacing:.14em;font-size:13px}
+.brand span{color:var(--long);margin:0 2px}
+.pill{font:12px var(--mono);padding:3px 10px;border:1px solid var(--edge);border-radius:3px}
+.pill.ok{border-color:var(--long);color:var(--long)} .pill.warn{border-color:var(--armed);color:var(--armed)}
+.pill.bad{border-color:var(--short);color:var(--short)} .dim{color:var(--muted)}
+.notice{font-size:11px;color:var(--muted);padding:6px 18px;border-bottom:1px solid var(--edge)}
+main{padding:14px 18px;display:grid;gap:14px;max-width:1200px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:6px;padding:14px 16px}
+.panel h2{margin:0 0 10px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.panel h2 small{text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px}
+.cols{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+@media(max-width:860px){.cols{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+th{color:var(--muted);font-weight:500;text-align:left;font-size:11px;padding:4px 8px;border-bottom:1px solid var(--edge)}
+td{padding:5px 8px;border-bottom:1px solid var(--edge)} .num,td.num{text-align:right}
+tbody tr{cursor:pointer} tbody tr:hover{background:#20262f}
+.up{color:var(--long)} .dn{color:var(--short)}
+/* Signature: runway strip — support ◄ price ► resistance with target zone shaded */
+.rw{position:relative;width:120px;height:10px;background:var(--edge);border-radius:2px;overflow:hidden}
+.rw .zone{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--long) 22%,transparent)}
+.rw .px{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--ink)}
+.rw .lvl{position:absolute;top:0;bottom:0;width:2px;background:var(--short)}
+.state{font-size:11px;padding:2px 7px;border-radius:3px;font-family:var(--mono)}
+.state.LONG{background:color-mix(in srgb,var(--long) 22%,transparent);color:var(--long)}
+.state.SHORT{background:color-mix(in srgb,var(--short) 22%,transparent);color:var(--short)}
+.state.ARMED{background:color-mix(in srgb,var(--armed) 20%,transparent);color:var(--armed)}
+.state.IDLE{color:var(--idle)}
+.crit{display:grid;grid-template-columns:44px 1fr auto;gap:6px 10px;font-family:var(--mono);font-size:12px}
+.crit .ok{color:var(--long)} .crit .no{color:var(--short)} .crit .off{color:var(--idle)}
+.keygrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+input{background:var(--bg);border:1px solid var(--edge);color:var(--ink);padding:7px 9px;border-radius:4px;font:12px var(--mono)}
+button{background:var(--long);border:none;color:#0c211a;font-weight:600;border-radius:4px;cursor:pointer}
+.prov{font-size:10px;color:var(--muted);margin-top:8px;font-family:var(--mono)}
+.badge{font-size:10px;border:1px solid var(--armed);color:var(--armed);border-radius:3px;padding:1px 5px}
+/* end */
