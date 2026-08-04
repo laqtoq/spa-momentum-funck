@@ -20,13 +20,20 @@ test('twelvedata: quotes handles single-symbol unwrapped response', async () => 
   assert.deepEqual(q, { SPY: { price: 772.48, changePct: 2.0, volume: 50, avgVolume: 40 } });
 });
 
-test('finnhub: nextEarningsMap picks earliest future date per ticker, null when absent', async () => {
-  const f = async () => ({ ok: true, status: 200, json: async () => ({ earningsCalendar: [
-    { symbol: 'MU', date: '2026-09-24' }, { symbol: 'MU', date: '2026-12-17' },
-    { symbol: 'DELL', date: '2026-08-27' }, { symbol: 'XXXX', date: '2026-08-10' },
-  ] }) });
+test('finnhub: nextEarningsMap queries per symbol (bulk calendar caps at 1500 rows), earliest future date, null when absent', async () => {
+  const perSymbol = {
+    MU: [{ symbol: 'MU', date: '2026-12-17' }, { symbol: 'MU', date: '2026-09-24' }],
+    DELL: [{ symbol: 'DELL', date: '2026-08-27' }],
+    SNDK: [],
+  };
+  const urls = [];
+  const f = async url => { urls.push(url);
+    const sym = new URL(url).searchParams.get('symbol');
+    return { ok: true, status: 200, json: async () => ({ earningsCalendar: perSymbol[sym] }) }; };
   const map = await nextEarningsMap(['MU', 'DELL', 'SNDK'], 'key', f, new Date('2026-08-04'));
   assert.deepEqual(map, { MU: '2026-09-24', DELL: '2026-08-27', SNDK: null });
+  assert.equal(urls.length, 3);                                  // one call per ticker
+  assert.ok(urls.every(u => new URL(u).searchParams.get('symbol')));
 });
 
 test('finnhub: nextEarningsMap surfaces HTTP errors', async () => {

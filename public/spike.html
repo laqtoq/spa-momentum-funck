@@ -38,9 +38,10 @@ async function run() {
   if (apk && aps) {
     log('1) Alpaca WS: connecting…');
     await new Promise(done => {
-      let auth = false, trades = 0, by = {};
+      let auth = false, trades = 0, by = {}, finished = false;
       const ws = new WebSocket('wss://stream.data.alpaca.markets/v2/iex');
-      const finish = verdict => { try { ws.close(); } catch {} done(); verdict(); };
+      const finish = verdict => { if (finished) return; finished = true;
+        try { ws.close(); } catch {} done(); verdict(); };
       const timer = setTimeout(() => {
         if (!auth) finish(() => log('1) FAIL — no successful auth in 25s (keys? paper vs live endpoint?)', 'fail'));
         else if (trades === 0) finish(() => log('1) PASS(conditional) — authenticated + subscribed, 0 trades in 25s. Expected if market CLOSED; rerun 15:30–22:00 CET.', 'warn'));
@@ -85,16 +86,20 @@ async function run() {
     else log(`3b) INFO — DELL ${dell.status}: ${dell.text.slice(0,120)}`, 'info');
   } else log('3) SKIPPED — no FMP key', 'warn');
 
-  // ---- CHECK 4: Finnhub REST earnings calendar coverage (FR-A7) ----
+  // ---- CHECK 4: Finnhub REST earnings, per-symbol (FR-A7) ----
+  // Per symbol because the bulk calendar caps at 1500 rows keeping rows nearest `to`,
+  // silently dropping near-term dates (verified 2026-08-04). 20 calls, 60/min budget.
   if (fh) {
     const from = new Date().toISOString().slice(0,10);
     const to = new Date(Date.now() + 120*24*3600*1000).toISOString().slice(0,10);
-    const c = await jfetch(`https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&token=${fh}`);
-    const rows = c.json?.earningsCalendar ?? [];
-    const covered = [...new Set(rows.filter(r => tickers.includes(r.symbol)).map(r => r.symbol))];
-    if (covered.length >= 10) log(`4) PASS — earnings calendar covers ${covered.length}/${tickers.length} watchlist names in next 120d (${covered.sort().join(', ')}). Uncovered names fail safe → badge (FRD 4.6).`, 'pass');
-    else if (rows.length) log(`4) PARTIAL — calendar returned ${rows.length} rows but only ${covered.length}/${tickers.length} watchlist names: ${covered.sort().join(', ') || 'none'}`, 'warn');
-    else log(`4) FAIL — HTTP ${c.status}: ${c.text.slice(0,180)}`, 'fail');
+    const results = await Promise.all(tickers.map(async s => {
+      const c = await jfetch(`https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&symbol=${s}&token=${fh}`);
+      const next = (c.json?.earningsCalendar ?? []).map(x => x.date).filter(d => d >= from).sort()[0] ?? null;
+      return [s, next];
+    }));
+    const covered = results.filter(r => r[1] !== null);
+    if (covered.length >= 10) log(`4) PASS — per-symbol calendar resolves ${covered.length}/${tickers.length} watchlist names in next 120d. Next up: ${covered.sort((a,b)=>a[1]<b[1]?-1:1).slice(0,4).map(r=>`${r[0]} ${r[1]}`).join(', ')}. Unresolved names fail safe → badge (FRD 4.6).`, 'pass');
+    else log(`4) PARTIAL — only ${covered.length}/${tickers.length} names resolved: ${covered.map(r=>r[0]).sort().join(', ') || 'none'}. Unresolved fail safe → badge.`, 'warn');
   } else log('4) SKIPPED — no Finnhub key', 'warn');
 
   // ---- CHECK 5 (informational): Finnhub WS symbol restriction — appendix evidence for the pivot ----
