@@ -1,19 +1,14 @@
-// FMP: batch quotes (overview + regime inputs) and earnings dates. Layer 3, provenance DELAYED-OK (C4).
+// FMP — REGIME INPUTS ONLY since FRD v1.6. Free tier for post-Aug-2025 keys is
+// symbol-restricted (C9): SPY and ^VIX are served, most watchlist names 402.
+// Watchlist quotes moved to Twelve Data; earnings moved to Finnhub REST.
 const BASE = 'https://financialmodelingprep.com';
-export async function batchQuotes(tickers, apiKey, f = fetch) {
-  const r = await f(`${BASE}/stable/batch-quote?symbols=${tickers.join(',')}&apikey=${apiKey}`);
-  if (!r.ok) throw new Error(`FMP batch-quote ${r.status}: ${await r.text()}`);
-  const rows = await r.json();
-  return Object.fromEntries(rows.map(q => [q.symbol, {
-    price: q.price, changePct: q.changePercentage ?? q.changesPercentage,
-    dayHigh: q.dayHigh, dayLow: q.dayLow, volume: q.volume,
-    avgVolume: q.avgVolume, ma50: q.priceAvg50, ma200: q.priceAvg200 }]));
+async function quote(symbol, apiKey, f) {
+  const r = await f(`${BASE}/stable/quote?symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`);
+  if (!r.ok) throw new Error(`FMP quote ${symbol} ${r.status}: ${(await r.text()).slice(0, 140)}`);
+  const [q] = await r.json();
+  return { price: q.price, changePct: q.changePercentage, ma50: q.priceAvg50, ma200: q.priceAvg200 };
 }
-export async function nextEarnings(ticker, apiKey, f = fetch) {
-  const r = await f(`${BASE}/stable/earnings?symbol=${ticker}&limit=4&apikey=${apiKey}`);
-  if (!r.ok) throw new Error(`FMP earnings ${r.status}`);
-  const rows = await r.json();
-  const today = new Date().toISOString().slice(0, 10);
-  const next = rows.map(x => x.date).filter(d => d >= today).sort()[0];
-  return next ?? null;   // FRD 4.6: unknown date fails safe → caller badges the name
+export async function regimeQuotes(apiKey, f = fetch) {
+  const [spy, vix] = await Promise.all([quote('SPY', apiKey, f), quote('^VIX', apiKey, f)]);
+  return { spy, vix: vix.price };
 }

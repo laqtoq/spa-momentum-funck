@@ -1,6 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openStream } from '../src/adapters/alpacaStream.js';
+import { regimeQuotes } from '../src/adapters/fmp.js';
+
+const fakeFetch = table => async url => {
+  for (const [needle, resp] of Object.entries(table)) if (url.includes(needle))
+    return { ok: resp.status === 200, status: resp.status,
+             json: async () => resp.body, text: async () => JSON.stringify(resp.body) };
+  throw new Error('unexpected url ' + url);
+};
+
+test('fmp: regimeQuotes maps SPY quote and VIX level', async () => {
+  const f = fakeFetch({
+    'symbol=SPY': { status: 200, body: [{ symbol: 'SPY', price: 772.85, changePercentage: 2.0, priceAvg50: 750.1, priceAvg200: 700.2 }] },
+    'symbol=%5EVIX': { status: 200, body: [{ symbol: '^VIX', price: 16.47 }] },
+  });
+  const r = await regimeQuotes('key', f);
+  assert.deepEqual(r, { spy: { price: 772.85, changePct: 2.0, ma50: 750.1, ma200: 700.2 }, vix: 16.47 });
+});
+
+test('fmp: regimeQuotes surfaces provider error text', async () => {
+  const f = async () => ({ ok: false, status: 402, text: async () => 'Restricted Endpoint: upgrade', json: async () => null });
+  await assert.rejects(() => regimeQuotes('key', f), /402.*Restricted Endpoint/s);
+});
 
 class FakeWS {
   static all = [];
