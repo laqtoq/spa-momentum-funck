@@ -21,7 +21,7 @@
 
 ### Task 1: Branch
 
-- [ ] `git checkout -b live-wiring` (from main, clean tree)
+- [x] `git checkout -b live-wiring` (from main, clean tree)
 
 ### Task 2: Blackout + slot helpers in `src/core/live.js`
 
@@ -34,7 +34,7 @@
 - Produces: `slotIndexNY(tMs: number) → number|null` — 0-based 5-minute slot within the 09:30–16:00 ET cash session (0..77), null outside; DST-safe via `Intl` with `America/New_York`.
 - Produces: `slotBaselineFrom(bars5m, todayKeyNY?) → number[78]` — per-slot average volume across prior sessions (bars from the current NY day excluded).
 
-- [ ] **Step 1: failing tests** — create `test/live.test.js`:
+- [x] **Step 1: failing tests** — create `test/live.test.js`:
 
 ```js
 import { test } from 'node:test';
@@ -73,8 +73,8 @@ test('slotBaselineFrom: averages same slot across sessions, excludes today', () 
 });
 ```
 
-- [ ] **Step 2:** Run `node --test test/live.test.js` → FAIL (module missing).
-- [ ] **Step 3: implement** — create `src/core/live.js` (helpers only for now):
+- [x] **Step 2:** Run `node --test test/live.test.js` → FAIL (module missing).
+- [x] **Step 3: implement** — create `src/core/live.js` (helpers only for now):
 
 ```js
 // Live-mode orchestration (FR-A15–A18): all provider calls + live state behind injected deps.
@@ -119,8 +119,8 @@ export function slotBaselineFrom(bars5m, todayKeyNY) {
 }
 ```
 
-- [ ] **Step 4:** `node --test test/live.test.js` → 3 pass.
-- [ ] **Step 5:** Commit: `git add src/core/live.js test/live.test.js && git commit -m "Live helpers: blackout window (FR-A8), NY slot index + relvol baseline (E2)"`
+- [x] **Step 4:** `node --test test/live.test.js` → 3 pass.
+- [x] **Step 5:** Commit: `git add src/core/live.js test/live.test.js && git commit -m "Live helpers: blackout window (FR-A8), NY slot index + relvol baseline (E2)"`
 
 ### Task 3: `startLive` orchestrator
 
@@ -136,7 +136,7 @@ export function slotBaselineFrom(bars5m, todayKeyNY) {
   - Evaluation: for each name with structure+daily+baseline+live data present, assembles the same ctx as demo mode (real daily bars for E4 instead of the demo's hour-bar approximation) and stores `evaluate(cfg, ctx)`.
   - `setPause(ticker, paused, isOverride)` mutates `paused/overrides` and re-evaluates (FR-A9 persistence is main.js's job via sessionStorage).
 
-- [ ] **Step 1: failing tests** — append to `test/live.test.js`:
+- [x] **Step 1: failing tests** — append to `test/live.test.js`:
 
 ```js
 import { startLive } from '../src/core/live.js';
@@ -231,8 +231,8 @@ test('startLive: reconnect triggers 5m backfill + VWAP reseed flag (FR-A17)', as
 });
 ```
 
-- [ ] **Step 2:** Run → FAIL (`startLive` not exported).
-- [ ] **Step 3: implement** — append to `src/core/live.js`:
+- [x] **Step 2:** Run → FAIL (`startLive` not exported).
+- [x] **Step 3: implement** — append to `src/core/live.js`:
 
 ```js
 // ---- Orchestrator (FR-A15–A18). All I/O via injected deps; UI renders from `state`. ----
@@ -360,8 +360,8 @@ export function startLive({ keys, watchlist, cfg }, deps, onUpdate = () => {}) {
 const nyDayOf = tMs => new Date(tMs).toLocaleString('sv-SE', { timeZone: 'America/New_York' }).slice(0, 10);
 ```
 
-- [ ] **Step 4:** `node --test test/live.test.js` → 8 pass. (If `nyDayOf` hoisting bites — it's a `const` arrow used inside `startLive` before definition at module bottom — move it up next to `nyParts`.)
-- [ ] **Step 5:** Commit: `git commit -m "Implement FR-A15/A17 live orchestrator: stream->aggregators->engine, chunked REST, backfill+reseed"`
+- [x] **Step 4:** `node --test test/live.test.js` → 8 pass. (If `nyDayOf` hoisting bites — it's a `const` arrow used inside `startLive` before definition at module bottom — move it up next to `nyParts`.)
+- [x] **Step 5:** Commit: `git commit -m "Implement FR-A15/A17 live orchestrator: stream->aggregators->engine, chunked REST, backfill+reseed"`
 
 ### Task 4: `main.js` live mode + provenance UI
 
@@ -371,7 +371,7 @@ const nyDayOf = tMs => new Date(tMs).toLocaleString('sv-SE', { timeZone: 'Americ
 
 Wiring (no unit tests — verified in browser; logic already tested in live.js):
 
-- [ ] **Step 1:** Imports + Start-live handler:
+- [x] **Step 1:** Imports + Start-live handler:
 
 ```js
 import { startLive } from './core/live.js';
@@ -404,20 +404,20 @@ function throttledRender() { if (renderQueued) return; renderQueued = true;
   setTimeout(() => { renderQueued = false; renderAll(); }, 400); }
 ```
 
-- [ ] **Step 2:** Make renderers mode-aware. Introduce `const L = () => state.liveHandle?.state;` and in each renderer branch on `state.mode === 'LIVE'`:
+- [x] **Step 2:** Make renderers mode-aware. Introduce `const L = () => state.liveHandle?.state;` and in each renderer branch on `state.mode === 'LIVE'`:
   - `renderHeader`: regime from `L().spyLive ?? L().spy.price` vs `L().spy.ma20` and `L().vix` (show `regime pending…` while ma20/vix null, plus `L().errors.regime` if set); stream pill `STREAM: ${L().stream.status} · ${Math.round(L().lastTickAge()/1000)}s` (age `—` when null); budget pill `API: ${used}/800`.
   - `renderAll` rows: live price `L().live[t]?.p` (class `up/dn` vs prior) falling back to `L().quotes[t]?.price` with a `stale` marker, `—` while neither; day% from `L().quotes[t]`; trend chip from screen bias: `n.bias === 'long' ? '↑50DMA*' : '↓50DMA*'` (`*` = at screen date, provenance EOD); earnings column: date from `L().earnings?.[t]` + blackout badge + `PAUSED` chip when `L().paused[t]`, click chip → `setPause(t, !paused, true)` + persist to sessionStorage + `confirm()` when unpausing inside a blackout ("TICKER reports DATE — trade through the event?", FR-A8 override is explicit); state cell from `L().states[t]?.state ?? '…'`.
   - `renderDrill`: use `L().states[t].criteria` (same shape as demo); provenance line `Structure: 1h REST-CACHED · Trigger: 5m LIVE-VENUE (IEX)` + ` · VWAP re-seeded` when `L().reseeded`.
   - Overview provenance footer: `Prices: LIVE-VENUE (Alpaca IEX), REST fallback · Reference: FMP DELAYED + Finnhub EOD + screen 2026-08-04` (FR-A18).
   - Keep a 2 s `setInterval` re-render in LIVE mode for tick ages (reuse the existing header interval — call `renderAll` only on data events, header every 2 s).
-- [ ] **Step 3:** `npm run build` green; browser: demo boot unchanged (no keys), then with keys (if user present / market open): header goes CONNECTED, quotes fill progressively, budget meter climbs, SNDK/WDC show PAUSED blackout chips.
-- [ ] **Step 4:** Commit: `git commit -m "Wire FR-A1/A2/A8/A9/A16-prep live UI: mode-aware renderers, pause chips, provenance labels (FR-A18)"`
+- [x] **Step 3:** `npm run build` green; browser: demo boot unchanged (no keys), then with keys (if user present / market open): header goes CONNECTED, quotes fill progressively, budget meter climbs, SNDK/WDC show PAUSED blackout chips.
+- [x] **Step 4:** Commit: `git commit -m "Wire FR-A1/A2/A8/A9/A16-prep live UI: mode-aware renderers, pause chips, provenance labels (FR-A18)"`
 
 ### Task 5: Docs + verify + merge
 
-- [ ] **Step 1:** HANDOVER §5: live wiring done, what's verified headless vs. what needs a market-hours click-through; README status checkboxes.
-- [ ] **Step 2:** Full suite (all five test files) + `npm run build` + browser demo screenshot.
-- [ ] **Step 3:** Merge `live-wiring` → main (no-ff), push (auto-deploys), verify Pages run green.
+- [x] **Step 1:** HANDOVER §5: live wiring done, what's verified headless vs. what needs a market-hours click-through; README status checkboxes.
+- [x] **Step 2:** Full suite (all five test files) + `npm run build` + browser demo screenshot.
+- [x] **Step 3:** Merge `live-wiring` → main (no-ff), push (auto-deploys), verify Pages run green.
 
 ## Self-review notes
 - NFR-5 held: live mode calls `evaluate()` with the same ctx shape; no engine changes anywhere in this plan.
