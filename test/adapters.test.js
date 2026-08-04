@@ -2,6 +2,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openStream } from '../src/adapters/alpacaStream.js';
 import { regimeQuotes } from '../src/adapters/fmp.js';
+import { nextEarningsMap } from '../src/adapters/finnhub.js';
+
+test('finnhub: nextEarningsMap picks earliest future date per ticker, null when absent', async () => {
+  const f = async () => ({ ok: true, status: 200, json: async () => ({ earningsCalendar: [
+    { symbol: 'MU', date: '2026-09-24' }, { symbol: 'MU', date: '2026-12-17' },
+    { symbol: 'DELL', date: '2026-08-27' }, { symbol: 'XXXX', date: '2026-08-10' },
+  ] }) });
+  const map = await nextEarningsMap(['MU', 'DELL', 'SNDK'], 'key', f, new Date('2026-08-04'));
+  assert.deepEqual(map, { MU: '2026-09-24', DELL: '2026-08-27', SNDK: null });
+});
+
+test('finnhub: nextEarningsMap surfaces HTTP errors', async () => {
+  const f = async () => ({ ok: false, status: 429, text: async () => 'rate limit' });
+  await assert.rejects(() => nextEarningsMap(['MU'], 'key', f), /429/);
+});
 
 const fakeFetch = table => async url => {
   for (const [needle, resp] of Object.entries(table)) if (url.includes(needle))
