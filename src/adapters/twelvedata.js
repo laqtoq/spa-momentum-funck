@@ -9,3 +9,16 @@ export async function bars(symbol, interval, outputsize, apiKey, f = fetch, rang
   if (js.status === 'error') throw new Error(`TwelveData: ${js.message}`);
   return toBars(js);
 }
+// Overview quotes since FRD v1.6 (FMP free tier can't serve watchlist names, C9).
+// Callers chunk to ≤8 symbols per call via the FR-A5 queue: 1 credit per symbol, 8/min.
+export async function quotes(symbols, apiKey, f = fetch) {
+  const r = await f(`${BASE}/quote?symbol=${symbols.join(',')}&apikey=${apiKey}`);
+  const js = await r.json();
+  if (js.status === 'error') throw new Error(`TwelveData: ${js.message}`);
+  const rows = symbols.length === 1 ? { [symbols[0]]: js } : js;
+  return Object.fromEntries(symbols.map(s => {
+    const q = rows[s];
+    if (!q || q.status === 'error') return [s, null];
+    return [s, { price: +q.close, changePct: +q.percent_change, volume: +(q.volume ?? 0), avgVolume: +(q.average_volume ?? 0) }];
+  }));
+}

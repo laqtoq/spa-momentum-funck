@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import { openStream } from '../src/adapters/alpacaStream.js';
 import { regimeQuotes } from '../src/adapters/fmp.js';
 import { nextEarningsMap } from '../src/adapters/finnhub.js';
+import { quotes } from '../src/adapters/twelvedata.js';
+
+test('twelvedata: quotes maps batch response, null for failed symbols', async () => {
+  const f = async () => ({ json: async () => ({
+    DELL: { close: '470.435', percent_change: '-4.4', volume: '9000000', average_volume: '8000000' },
+    MU: { code: 404, status: 'error', message: 'symbol not found' },
+  }) });
+  const q = await quotes(['DELL', 'MU'], 'key', f);
+  assert.deepEqual(q, { DELL: { price: 470.435, changePct: -4.4, volume: 9000000, avgVolume: 8000000 }, MU: null });
+});
+
+test('twelvedata: quotes handles single-symbol unwrapped response', async () => {
+  const f = async () => ({ json: async () => ({ symbol: 'SPY', close: '772.48', percent_change: '2.0', volume: '50', average_volume: '40' }) });
+  const q = await quotes(['SPY'], 'key', f);
+  assert.deepEqual(q, { SPY: { price: 772.48, changePct: 2.0, volume: 50, avgVolume: 40 } });
+});
 
 test('finnhub: nextEarningsMap picks earliest future date per ticker, null when absent', async () => {
   const f = async () => ({ ok: true, status: 200, json: async () => ({ earningsCalendar: [
