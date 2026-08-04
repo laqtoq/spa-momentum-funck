@@ -1,79 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Data Spike — free-tier verification</title>
+<head><meta charset="UTF-8"><title>Data Spike v2 — post-pivot free-tier verification</title>
 <style>
 body{font:14px/1.5 ui-monospace,Menlo,monospace;background:#14171C;color:#E8EAED;max-width:760px;margin:30px auto;padding:0 16px}
 input{background:#1B2027;border:1px solid #262D36;color:#E8EAED;padding:7px;border-radius:4px;width:100%;margin:4px 0}
 button{background:#3FB68B;border:none;color:#0c211a;font-weight:700;padding:9px 16px;border-radius:4px;cursor:pointer;margin-top:8px}
-.pass{color:#3FB68B}.fail{color:#D08048}.warn{color:#C9A961}
+.pass{color:#3FB68B}.fail{color:#D08048}.warn{color:#C9A961}.info{color:#8b98a9}
 #log div{border-bottom:1px solid #262D36;padding:6px 0}
 </style></head>
 <body>
-<h2>Free-tier data spike</h2>
-<p>Verifies the three FRD assumptions from <em>this</em> browser. Keys are used in-page only, never stored or sent anywhere except the providers themselves.</p>
-<input id="fh" placeholder="Finnhub key (free)">
-<input id="td" placeholder="Twelve Data key (free)">
-<input id="fmp" placeholder="FMP key (free)">
+<h2>Data spike v2 — post-pivot verification</h2>
+<p>Verifies the FRD v1.6 provider set from <em>this</em> browser. Keys are used in-page only, never stored or sent anywhere except the providers themselves.</p>
+<input id="apk" placeholder="Alpaca API key ID (paper ok)">
+<input id="aps" placeholder="Alpaca API secret">
+<input id="td" placeholder="Twelve Data key">
+<input id="fmp" placeholder="FMP key">
+<input id="fh" placeholder="Finnhub key (REST earnings; also runs WS-restriction documenter)">
 <button onclick="run()">Run all checks</button>
 <div id="log"></div>
 <script>
 const log = (msg, cls='') => { const d = document.createElement('div'); d.className = cls; d.textContent = msg; document.getElementById('log').appendChild(d); };
+const jfetch = async url => {            // never throws on non-JSON: returns status + raw text + parsed-if-possible
+  const r = await fetch(url); const text = await r.text();
+  let json = null; try { json = JSON.parse(text); } catch {}
+  return { status: r.status, text, json };
+};
 
 async function run() {
   document.getElementById('log').innerHTML = '';
+  const apk = document.getElementById('apk').value.trim(), aps = document.getElementById('aps').value.trim();
+  const td = document.getElementById('td').value.trim(), fmp = document.getElementById('fmp').value.trim();
   const fh = document.getElementById('fh').value.trim();
-  const td = document.getElementById('td').value.trim();
-  const fmp = document.getElementById('fmp').value.trim();
+  const wl = await (await fetch('./watchlist.json')).json();
+  const tickers = wl.names.map(n => n.ticker);
 
-  // ---- CHECK 1: Finnhub WebSocket from a browser page (C1 / FR-A15) ----
-  if (fh) {
-    log('1) Finnhub WS: connecting…');
+  // ---- CHECK 1: Alpaca IEX WS — the new Layer 1 (FR-A15, C1) ----
+  if (apk && aps) {
+    log('1) Alpaca WS: connecting…');
     await new Promise(done => {
-      let trades = 0, opened = false;
-      const ws = new WebSocket('wss://ws.finnhub.io?token=' + fh);
+      let auth = false, trades = 0, by = {}, finished = false;
+      const ws = new WebSocket('wss://stream.data.alpaca.markets/v2/iex');
+      const finish = verdict => { if (finished) return; finished = true;
+        try { ws.close(); } catch {} done(); verdict(); };
       const timer = setTimeout(() => {
-        if (!opened) log('1) FAIL — socket never opened (key? network?)', 'fail');
-        else if (trades === 0) log('1) PASS(conditional) — socket open + subscribed, 0 trades in 20s. If US market is CLOSED right now this is expected; rerun 15:30–22:00 CET.', 'warn');
-        ws.close(); done();
-      }, 20000);
-      ws.onopen = () => { opened = true; log('   socket open, subscribing DELL, MU, SPY…');
-        ['DELL','MU','SPY'].forEach(s => ws.send(JSON.stringify({type:'subscribe',symbol:s}))); };
-      ws.onmessage = ev => { const m = JSON.parse(ev.data);
-        if (m.type === 'trade') { trades += m.data.length;
-          if (trades >= 5) { clearTimeout(timer); log(`1) PASS — live trades streaming (${trades} ticks). Layer 1 confirmed.`, 'pass'); ws.close(); done(); } } };
+        if (!auth) finish(() => log('1) FAIL — no successful auth in 25s (keys? paper vs live endpoint?)', 'fail'));
+        else if (trades === 0) finish(() => log('1) PASS(conditional) — authenticated + subscribed, 0 trades in 25s. Expected if market CLOSED; rerun 15:30–22:00 CET.', 'warn'));
+        else finish(() => log(`1) PASS — authenticated, ${trades} trades in 25s: ${JSON.stringify(by)}. Layer 1 confirmed on watchlist names.`, 'pass'));
+      }, 25000);
+      ws.onopen = () => ws.send(JSON.stringify({ action: 'auth', key: apk, secret: aps }));
+      ws.onmessage = ev => { for (const m of JSON.parse(ev.data)) {
+        if (m.T === 'success' && m.msg === 'authenticated') { auth = true;
+          log('   authenticated; subscribing DELL, MU, SPY, AAPL…');
+          ws.send(JSON.stringify({ action: 'subscribe', trades: ['DELL','MU','SPY','AAPL'] })); }
+        else if (m.T === 'error') { clearTimeout(timer);
+          finish(() => log(`1) FAIL — Alpaca error ${m.code}: ${m.msg}`, 'fail')); }
+        else if (m.T === 't') { trades++; by[m.S] = (by[m.S] || 0) + 1;
+          if (trades >= 40) { clearTimeout(timer);
+            finish(() => log(`1) PASS — authenticated, ${trades} trades (early exit): ${JSON.stringify(by)}. Layer 1 confirmed.`, 'pass')); } } } };
       ws.onerror = () => {};
+      ws.onclose = () => {};
     });
-  } else log('1) SKIPPED — no Finnhub key', 'warn');
+  } else log('1) SKIPPED — no Alpaca key pair', 'warn');
 
-  // ---- CHECK 2: Twelve Data 5-minute history depth (C5 / FR-B2) ----
+  // ---- CHECK 2: Twelve Data on WATCHLIST names (Layer 2 + overview quotes) ----
   if (td) {
-    const past = new Date(Date.now() - 60*24*3600*1000).toISOString().slice(0,10); // ~60 days ago
-    try {
-      const r = await fetch(`https://api.twelvedata.com/time_series?symbol=AAPL&interval=5min&start_date=${past}&end_date=${past} 23:59:00&outputsize=200&timezone=UTC&apikey=${td}`);
-      const js = await r.json();
-      if (js.values?.length >= 70) log(`2) PASS — ${js.values.length} 5m bars for ${past} (60 days back). Simulator depth OK at least 60d.`, 'pass');
-      else if (js.values?.length) log(`2) PARTIAL — only ${js.values.length} bars for ${past}: `+JSON.stringify(js.values[0]), 'warn');
-      else log('2) FAIL — ' + (js.message || JSON.stringify(js).slice(0,200)), 'fail');
-    } catch (e) { log('2) FAIL — ' + e + ' (if CORS error: Twelve Data browser access broken)', 'fail'); }
+    const past = new Date(Date.now() - 60*24*3600*1000).toISOString().slice(0,10);
+    const a = await jfetch(`https://api.twelvedata.com/time_series?symbol=DELL&interval=5min&start_date=${past}&end_date=${past} 23:59:00&outputsize=200&timezone=UTC&apikey=${td}`);
+    if (a.json?.values?.length >= 70) log(`2a) PASS — ${a.json.values.length} 5m DELL bars for ${past} (60d back). Simulator depth OK on a watchlist name.`, 'pass');
+    else log(`2a) FAIL — HTTP ${a.status}: ${a.text.slice(0,180)}`, 'fail');
+    const q = await jfetch(`https://api.twelvedata.com/quote?symbol=DELL,MU,SPY&apikey=${td}`);
+    if (q.json?.DELL?.close) log(`2b) PASS — /quote batch OK (DELL ${q.json.DELL.close}, SPY ${q.json.SPY?.close}). Overview quotes can move to Twelve Data (8 credits/min → chunked via queue).`, 'pass');
+    else log(`2b) FAIL — HTTP ${q.status}: ${q.text.slice(0,180)}`, 'fail');
   } else log('2) SKIPPED — no Twelve Data key', 'warn');
 
-  // ---- CHECK 3: FMP batch-quote + earnings on the free key (FR-A1/A7) ----
+  // ---- CHECK 3: FMP regime residual — SPY + ^VIX must work; DELL expected 402 (C9) ----
   if (fmp) {
-    try {
-      const r = await fetch(`https://financialmodelingprep.com/stable/batch-quote?symbols=DELL,MU,SPY&apikey=${fmp}`);
-      const js = await r.json();
-      if (Array.isArray(js) && js[0]?.priceAvg50) log(`3a) PASS — batch-quote OK, incl. 50DMA (DELL ma50=${js[0].priceAvg50}).`, 'pass');
-      else log('3a) FAIL/LIMITED — response: ' + JSON.stringify(js).slice(0,200), 'fail');
-    } catch (e) { log('3a) FAIL — ' + e, 'fail'); }
-    try {
-      const r = await fetch(`https://financialmodelingprep.com/stable/earnings?symbol=MU&limit=4&apikey=${fmp}`);
-      const js = await r.json();
-      if (Array.isArray(js) && js[0]?.date) log(`3b) PASS — earnings endpoint OK (next MU dates: ${js.map(x=>x.date).join(', ')}).`, 'pass');
-      else log('3b) FAIL/LIMITED — ' + JSON.stringify(js).slice(0,200), 'fail');
-    } catch (e) { log('3b) FAIL — ' + e, 'fail'); }
+    const spy = await jfetch(`https://financialmodelingprep.com/stable/quote?symbol=SPY&apikey=${fmp}`);
+    const vix = await jfetch(`https://financialmodelingprep.com/stable/quote?symbol=^VIX&apikey=${fmp}`);
+    if (spy.json?.[0]?.price && vix.json?.[0]?.price)
+      log(`3a) PASS — regime inputs OK (SPY ${spy.json[0].price}, ^VIX ${vix.json[0].price}).`, 'pass');
+    else log(`3a) FAIL — SPY ${spy.status}: ${spy.text.slice(0,90)} | ^VIX ${vix.status}: ${vix.text.slice(0,90)}`, 'fail');
+    const dell = await jfetch(`https://financialmodelingprep.com/stable/quote?symbol=DELL&apikey=${fmp}`);
+    if (dell.status === 402) log('3b) EXPECTED-RESTRICTED — DELL 402 on FMP free tier (compromise C9 documented; watchlist quotes come from Twelve Data).', 'info');
+    else if (dell.json?.[0]?.price) log(`3b) SURPRISE — DELL now served (${dell.json[0].price}); C9 may be liftable, note in FRD.`, 'warn');
+    else log(`3b) INFO — DELL ${dell.status}: ${dell.text.slice(0,120)}`, 'info');
   } else log('3) SKIPPED — no FMP key', 'warn');
 
-  log('Done. Screenshot this and report results back.');
+  // ---- CHECK 4: Finnhub REST earnings, per-symbol (FR-A7) ----
+  // Per symbol because the bulk calendar caps at 1500 rows keeping rows nearest `to`,
+  // silently dropping near-term dates (verified 2026-08-04). 20 calls, 60/min budget.
+  if (fh) {
+    const from = new Date().toISOString().slice(0,10);
+    const to = new Date(Date.now() + 120*24*3600*1000).toISOString().slice(0,10);
+    const results = await Promise.all(tickers.map(async s => {
+      const c = await jfetch(`https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&symbol=${s}&token=${fh}`);
+      const next = (c.json?.earningsCalendar ?? []).map(x => x.date).filter(d => d >= from).sort()[0] ?? null;
+      return [s, next];
+    }));
+    const covered = results.filter(r => r[1] !== null);
+    if (covered.length >= 10) log(`4) PASS — per-symbol calendar resolves ${covered.length}/${tickers.length} watchlist names in next 120d. Next up: ${covered.sort((a,b)=>a[1]<b[1]?-1:1).slice(0,4).map(r=>`${r[0]} ${r[1]}`).join(', ')}. Unresolved names fail safe → badge (FRD 4.6).`, 'pass');
+    else log(`4) PARTIAL — only ${covered.length}/${tickers.length} names resolved: ${covered.map(r=>r[0]).sort().join(', ') || 'none'}. Unresolved fail safe → badge.`, 'warn');
+  } else log('4) SKIPPED — no Finnhub key', 'warn');
+
+  // ---- CHECK 5 (informational): Finnhub WS symbol restriction — appendix evidence for the pivot ----
+  if (fh) {
+    log('5) Finnhub WS restriction documenter: 12s sample…', 'info');
+    await new Promise(done => {
+      let by = {}, opened = false;
+      const ws = new WebSocket('wss://ws.finnhub.io?token=' + fh);
+      const timer = setTimeout(() => { try { ws.close(); } catch {}
+        log(`5) INFO — opened=${opened}; per-symbol trades in 12s: ${JSON.stringify(by)} (subscribed SPY, AAPL, DELL). Empty SPY/DELL vs active AAPL = free-tier symbol restriction → why Layer 1 moved to Alpaca.`, 'info');
+        done(); }, 12000);
+      ws.onopen = () => { opened = true;
+        ['SPY','AAPL','DELL'].forEach(s => ws.send(JSON.stringify({ type: 'subscribe', symbol: s }))); };
+      ws.onmessage = ev => { const m = JSON.parse(ev.data);
+        if (m.type === 'trade') m.data.forEach(t => { by[t.s] = (by[t.s] || 0) + 1; }); };
+      ws.onerror = () => {};
+    });
+  }
+  log('Done. Screenshot this page for the submission appendix.');
 }
 </script>
 </body>

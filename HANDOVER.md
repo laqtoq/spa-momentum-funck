@@ -59,15 +59,15 @@ If `docs/FRD.md` is missing, it was delivered as `FRD_momentum_runway.md` alongs
 
 ## 5. Current build state (verified 2026-08-04)
 
-**Tests: 25/25 green.** Run: `node --test test/core.test.js test/engine/*.test.js` (do NOT pass a bare directory to `node --test` — it miscounts, see §10). `npm run build` green (~10.4 kB JS).
+**Tests: 34/34 green.** Run: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/adapters.test.js` (do NOT pass a bare directory to `node --test` — it miscounts, see §10). `npm run build` green (~10.4 kB JS).
 
 Done: signal engine (indicators cross-verified vs Python fixtures; levels/runway; evaluate() with per-criterion toggles; walker w/ conservative same-bar rule + MAE/MFE; full sizing/bucket logic) · core (config+FNV-1a preset hash, CET session clock, throttle queue w/ budget meter, deterministic tick aggregator, localStorage trade journal w/ KPIs & CSV/JSON round-trip) · adapters written (FMP, Twelve Data, Finnhub WS, news env-switch, Riskline, OpenRouter CO-STAR, demo) · **demo mode**: app boots keyless on canned data with the real engine · UI: overview w/ runway-strip signature element, drill-down criteria pass/fail, risk panel, regime/session/stream header · `public/spike.html` verification page.
 
-**NOT yet verified (blocking live wiring) — run the spike first:** open `<pages-url>/spike.html` during US market hours (15:30–22:00 CET) with the user's keys: (1) Finnhub WS streams trades to a browser page, (2) Twelve Data free tier serves 5m bars ≥60 days back, (3) FMP free key serves `stable/batch-quote` (with 50DMA) + `stable/earnings`. Failure fallbacks are pre-designed: Alpaca stream / Polygon history / per-symbol FMP — a failure means an FRD §6 amendment (compromise register), not improvisation.
+**Spike v1 ran 2026-08-04 (live market) and FAILED as designed — fallbacks activated, FRD amended to v1.6 (see C9):** Finnhub free WS streams only a popular-symbol subset (AAPL/TSLA yes, SPY/MU/DELL silent, no error frames); FMP free tier for post-Aug-2025 keys is symbol-restricted (SPY/^VIX OK, watchlist names 402) with batch + legacy `v3` endpoints dead. Verified working: Twelve Data fully serves watchlist names (1h/5m/60d/`/quote` batch); Finnhub REST `/calendar/earnings` works from the browser (CORS fine — v1.5's contrary assumption was wrong); FMP `stable/quote` for SPY + ^VIX. Pivot implemented and **spike v2 PASSED with the user's keys 2026-08-04 (live market)**: Alpaca IEX WS authenticated and streamed SPY/MU/DELL/AAPL (Layer 1 confirmed); Twelve Data overview quotes + 60d 5m depth on watchlist names confirmed; FMP SPY/^VIX regime pair confirmed (DELL 402 = expected C9 evidence); Finnhub earnings resolved **20/20 watchlist names** — but only via per-symbol calendar calls: the bulk calendar caps at 1500 rows keeping rows nearest `to`, silently dropping near-term dates (adapter + FR-A7 written per-symbol accordingly). **Live wiring (FR-A15–A18) is unblocked.**
 
 ## 6. Architecture (condensed — FRD §6–7 is authoritative)
 
-Three data layers: **L1** Finnhub WebSocket (real-time trades → client-side 1m/5m bars + session VWAP + position monitor; WS is CORS-exempt so it works on static Pages; single-venue = compromise C1) · **L2** Twelve Data REST via the throttle queue (1h structure bars, 5m baselines/backfill, simulator history; 8/min, 800/day) · **L3** FMP batch quote + earnings, R-side screening, news/Riskline/OpenRouter context.
+Three data layers: **L1** Alpaca IEX WebSocket (real-time trades → client-side 1m/5m bars + session VWAP + position monitor; WS is CORS-exempt so it works on static Pages; single-venue IEX = compromise C1; replaced Finnhub WS 2026-08-04, see C9) · **L2** Twelve Data REST via the throttle queue (1h structure bars, 5m baselines/backfill, simulator history, overview quotes chunked ≤8/call; 8 credits/min, 800/day) · **L3** FMP regime inputs (SPY, ^VIX only) + Finnhub REST earnings calendar, R-side screening, news/Riskline/OpenRouter context.
 
 Modules: **A** live dashboard · **B** point-in-time simulator (strict point-in-time discipline, conservative same-bar rule, preset-hash stamping) · **C** config workbench (presets, tuning/validation split, batch runner, ≤3-params-off-baseline budget) · **D** allocator + trade journal.
 
@@ -75,7 +75,7 @@ Iron rules (NFRs): one engine code path for A/B/C — never fork simulation logi
 
 ## 7. Keys & secrets
 
-Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost-only CORS), OpenRouter, Finnhub (newest). **Keys are entered in the deployed app's form fields at runtime — never committed, never in `.env` files that ship, never in `.mcp.json`.** `key_dates.json`/`watchlist.json` are the only committed config. NewsAPI is used automatically on localhost (fresher, for demo recordings); newsdata.io when deployed (~12h delayed — labeled in UI, context only, never a trading input).
+Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost-only CORS), OpenRouter, Finnhub, Alpaca key-ID + secret pair (paper account; needed since the v1.6 pivot). A gitignored local `.env` (template: `.env.example`) is the user's personal copy-paste store — the app never reads it; never use a `VITE_` prefix there or Vite will inline the value into the public bundle. **Keys are entered in the deployed app's form fields at runtime — never committed, never in `.env` files that ship, never in `.mcp.json`.** `key_dates.json`/`watchlist.json` are the only committed config. NewsAPI is used automatically on localhost (fresher, for demo recordings); newsdata.io when deployed (~12h delayed — labeled in UI, context only, never a trading input).
 
 ## 8. Working agreements (how we build)
 
@@ -99,6 +99,7 @@ Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost
 ## 10. Environment gotchas (learned the hard way)
 
 - `node --test <directory>` miscounts/false-fails — always pass explicit test file paths.
+- Free-tier symbol restrictions (2026-08-04): FMP and Finnhub WS serve only popular symbols on new free keys — AAPL/SPY tests pass while watchlist names fail silently or 402. **Always verify data assumptions with actual watchlist names, never AAPL.**
 - Wikipedia and some APIs 403 the default Python/urllib UA — send a real User-Agent.
 - Vite only ships `public/` — anything that must exist on Pages (spike.html, watchlist.json) lives there.
 - Fixture files carry 6 decimals — numeric test tolerances ≥ 2e-6 absolute, or regenerate at full precision.
@@ -108,7 +109,7 @@ Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost
 
 ## 11. Submission checklist (keep current as phases complete)
 
-- [ ] Spike passed at deployed URL (screenshot for appendix) — or fallbacks activated + FRD amended
+- [x] Spike v1 run 2026-08-04 → fallbacks activated + FRD amended to v1.6 (C9) · [x] Spike v2 passed with user keys 2026-08-04 (screenshot taken; keep for appendix) · [ ] Spike v2 re-run at deployed URL once Pages exists
 - [ ] Live wiring FR-A15–A18 · [ ] Position monitor UI · [ ] Module B · [ ] Module D UI · [ ] Module C (minimum: preset editing)
 - [ ] R port of screening pipeline committed (`screen/` folder) + rerun close to submission for a fresh watchlist
 - [ ] FRD human-edited (name, voice pass, thresholds sanity: VIX 30, 18:00 cutoff, 450% β-cap)
