@@ -74,3 +74,49 @@ test('demo dataset is deterministic across builds', () => {
   assert.deepEqual(a.hourBars.DELL, b.hourBars.DELL);
   assert.equal(a.fiveMin.DELL.at(-1).t, DEMO_ASOF.getTime() - 3e5);
 });
+
+// ---- Module B demo episode (decision D9): the panel must demonstrate itself keylessly ----
+
+test('demo simulator stages all three verdicts through the real orchestrator', async () => {
+  const { demoSimProviders, DEMO_SIM } = await import('../src/adapters/demo.js');
+  const { runSimulation } = await import('../src/core/sim.js');
+  const { makeQueue } = await import('../src/core/queue.js');
+  const deps = { ...demoSimProviders(WL), queue: makeQueue({ perMinute: 1e6, now: () => Date.now() }) };
+  const run = ticker => runSimulation({ ...DEMO_SIM, ticker, cfg: BASELINE, watchlist: WL }, deps);
+
+  const win = await run('DELL');
+  assert.equal(win.state, 'LONG', 'DELL sets up');
+  assert.equal(win.verdict, 'WIN');
+  assert.equal(win.resolution, '5min');
+  assert.deepEqual(win.errors, {});
+
+  const loss = await run('LITE');
+  assert.equal(loss.verdict, 'LOSS', 'one bar spans both levels — conservative same-bar rule');
+  assert.equal(loss.walk.reason, 'STOP');
+
+  const timeout = await run('PWR');
+  assert.equal(timeout.verdict, 'TIME-OUT');
+
+  const quiet = await run('MU');
+  assert.equal(quiet.qualified, false, 'names without a staged setup do not qualify');
+});
+
+test('demo simulator evaluates every criterion — nothing is skipped for want of data', async () => {
+  const { demoSimProviders, DEMO_SIM } = await import('../src/adapters/demo.js');
+  const { runSimulation } = await import('../src/core/sim.js');
+  const { makeQueue } = await import('../src/core/queue.js');
+  const deps = { ...demoSimProviders(WL), queue: makeQueue({ perMinute: 1e6, now: () => Date.now() }) };
+  const r = await runSimulation({ ...DEMO_SIM, ticker: 'DELL', cfg: BASELINE, watchlist: WL }, deps);
+  assert.deepEqual(r.notEvaluated, [], 'demo supplies VIX and earnings, so no criterion is stamped off');
+  for (const c of r.criteria) assert.notEqual(c.pass, null, `${c.id} should be evaluated`);
+});
+
+test('demo simulator drops the simulated session\'s own daily bar', async () => {
+  const { demoSimProviders, DEMO_SIM } = await import('../src/adapters/demo.js');
+  const { runSimulation } = await import('../src/core/sim.js');
+  const { makeQueue } = await import('../src/core/queue.js');
+  const deps = { ...demoSimProviders(WL), queue: makeQueue({ perMinute: 1e6, now: () => Date.now() }) };
+  const r = await runSimulation({ ...DEMO_SIM, ticker: 'DELL', cfg: BASELINE, watchlist: WL }, deps);
+  // that bar carries a 1.4x high; if it leaked in, the runway level would come from it
+  assert.ok(r.levels.runway < r.entry.price * 1.2, `runway ${r.levels.runway} looks like look-ahead`);
+});

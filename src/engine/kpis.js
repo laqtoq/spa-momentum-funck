@@ -2,10 +2,12 @@
 // trades. Pure — the journal stores, this measures. A metric the journal cannot yet support
 // returns null with a stated reason; it never returns 0, because 0 is a claim and null is not.
 
+import { cetDay as cetDayOf } from '../core/tz.js';
+
 // Per-trade account return in % of equity: the series that actually moves the book.
 const ret = t => (t.sizeFrac ?? 0) * (t.leveredPct ?? 0);
 const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
-const cetDay = ts => new Date(ts).toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }).slice(0, 10);
+const cetDay = ts => cetDayOf(new Date(ts).getTime());
 const isWeekday = day => { const d = new Date(day + 'T12:00:00Z').getUTCDay(); return d !== 0 && d !== 6; };
 
 // Adverse distance beyond the recorded stop, in percentage points of the entry price.

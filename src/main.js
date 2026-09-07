@@ -6,17 +6,19 @@ import { computeKpis, killCriteria, realizedPnl } from './engine/kpis.js';
 import { runway } from './engine/levels.js';
 import { monitorPosition, excursion, stopPrice, targetPrice, fmtDuration } from './engine/monitor.js';
 import { makeJournal } from './core/store.js';
-import { demoData, demoContext, DEMO_ASOF } from './adapters/demo.js';
+import { demoData, demoContext, DEMO_ASOF, demoSimProviders, DEMO_SIM } from './adapters/demo.js';
 import { startLive, inBlackout } from './core/live.js';
+import { runSimulation, runScan } from './core/sim.js';
 import { makeQueue } from './core/queue.js';
 import { openStream } from './adapters/alpacaStream.js';
 import { regimeQuotes } from './adapters/fmp.js';
 import { quotes as tdQuotes, bars as tdBars } from './adapters/twelvedata.js';
-import { nextEarningsMap } from './adapters/finnhub.js';
+import { nextEarningsMap, earningsNear } from './adapters/finnhub.js';
 
 const $ = s => document.querySelector(s);
 const state = { mode: 'DEMO', wl: null, data: null, cfg: BASELINE, liveHandle: null,
-  journal: null, muted: false, form: null, medianAtr: 6.9, states: {} };
+  journal: null, muted: false, form: null, medianAtr: 6.9, states: {}, keys: null,
+  sim: { result: null, scan: null, handle: null, running: false } };
 const L = () => state.liveHandle?.state;
 const byT = t => state.wl.names.find(n => n.ticker === t);
 // Live mode runs on the wall clock; demo mode runs on the snapshot's as-of moment, so the
@@ -39,6 +41,7 @@ async function boot() {
   $('#mute').onclick = () => { state.muted = !state.muted;
     $('#mute').textContent = state.muted ? 'alerts muted' : 'alerts on';
     $('#mute').classList.toggle('on', state.muted); };
+  bootSim();
   renderAll();
   renderForm();
   setInterval(renderHeader, 2000);
@@ -54,6 +57,7 @@ function goLive() {
     $('#mode').textContent = 'LIVE needs at least the Alpaca key pair and a Twelve Data key.'; return;
   }
   const queue = makeQueue();
+  state.keys = keys;
   const deps = { openStream, regimeQuotes, tdQuotes,
     tdBars: (sym, interval, outputsize) => tdBars(sym, interval, outputsize, keys.td),
     earningsMap: nextEarningsMap, queue, journal: state.journal };
@@ -572,6 +576,195 @@ function renderForm() {
       if (confirm('Trade closed and journalled. Export the journal now? (localStorage is the only persistence — C8)')) exportJournal();
     };
   }
+}
+
+
+// ---- Module B — point-in-time simulator (FR-B1–B8) ----
+
+// Demo and live run the identical orchestrator and the identical engine; only the providers differ.
+function simDeps() {
+  if (state.mode === 'LIVE') {
+    const k = state.keys;
+    let vixDead = false;                     // one failed probe is enough — a scan must not retry 20×
+    return {
+      queue: makeQueue(),                    // the real FR-A5 throttle: a 20-name scan takes minutes
+      tdBars: (sym, interval, size, range) => tdBars(sym, interval, size, k.td, fetch, range),
+      vixAt: async date => {
+        if (vixDead || !k.td) return null;
+        try {
+          const b = await tdBars('VIX', '1day', 5000, k.td, fetch, { end_date: date });
+          return b.at(-1)?.c ?? null;
+        } catch { vixDead = true; return null; }   // free tiers rarely carry index history
+      },
+      earningsAt: k.fh ? (ticker, date) => earningsNear(ticker, date, k.fh) : undefined,
+    };
+  }
+  return { ...demoSimProviders(state.wl), queue: makeQueue({ perMinute: 1e6 }) };
+}
+
+function bootSim() {
+  $('#s_date').value = DEMO_SIM.date;
+  $('#s_time').value = DEMO_SIM.timeCET;
+  $('#s_preset').value = `baseline ${presetHash(state.cfg)}`;
+  $('#s_ticker').innerHTML = state.wl.names.map(n => `<option>${n.ticker}</option>`).join('');
+  $('#s_run').onclick = () => runSim(false);
+  $('#s_scan').onclick = () => runSim(true);
+  $('#s_cancel').onclick = () => { state.sim.handle?.cancel(); $('#s_progress').textContent = 'cancelling…'; };
+  renderSimCaveats();
+}
+
+async function runSim(scan) {
+  if (state.sim.running) return;
+  const args = { date: $('#s_date').value, timeCET: $('#s_time').value, cfg: state.cfg, watchlist: state.wl };
+  if (!args.date || !args.timeCET) return;
+  state.sim = { result: null, scan: null, handle: null, running: true };
+  $('#simbody').className = 'dim';
+  $('#simbody').textContent = scan ? 'Scanning the watchlist…' : 'Running…';
+  $('#s_progress').textContent = state.mode === 'LIVE'
+    ? 'live providers — the FR-A5 queue paces this at 8 calls/min' : '';
+  const deps = simDeps();
+  try {
+    if (scan) {
+      const handle = runScan(args, deps, p => {
+        $('#s_progress').textContent = `${p.done}/${p.total}${p.cancelled ? ' — cancelled' : ''}`;
+        state.sim.scan = { results: [...(state.sim.scan?.results ?? []), p.last], done: p.done, total: p.total };
+        renderSim();
+      });
+      state.sim.handle = handle;
+      const out = await handle.promise;
+      state.sim.scan = { ...out, done: out.results.length };
+    } else {
+      state.sim.result = await runSimulation({ ...args, ticker: $('#s_ticker').value }, deps);
+    }
+  } catch (e) {
+    $('#simbody').className = 'dim';
+    $('#simbody').textContent = `Simulation failed: ${e.message ?? e}`;
+  }
+  state.sim.running = false;
+  $('#s_progress').textContent = state.sim.scan?.cancelled ? 'cancelled' : '';
+  renderSim();
+  renderSimCaveats();
+}
+
+// Episode chart: candles, with entry, stop, target and the binding runway level drawn in (FR-B5).
+function episodeChart(r) {
+  const bars = r.episode ?? [];
+  if (bars.length < 2) return '';
+  const W = 620, H = 190, PAD = 34;
+  const lv = r.levels ?? {};
+  const prices = bars.flatMap(b => [b.h, b.l])
+    .concat([lv.stop, lv.target, lv.runway, r.entry?.price].filter(v => v != null));
+  const lo = Math.min(...prices), hi = Math.max(...prices), span = (hi - lo) || 1;
+  const y = p => PAD / 2 + (hi - p) / span * (H - PAD);
+  const x = i => 4 + i * ((W - 8) / bars.length);
+  const bw = Math.max(1.2, (W - 8) / bars.length * 0.62);
+
+  const candles = bars.map((b, i) => {
+    const cls = b.c >= b.o ? 'up' : 'dn';
+    const cx = x(i) + bw / 2;
+    return `<line class="${cls}" x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${y(b.h).toFixed(1)}" y2="${y(b.l).toFixed(1)}" stroke-width="1"/>`
+      + `<rect class="${cls}" x="${x(i).toFixed(1)}" y="${Math.min(y(b.o), y(b.c)).toFixed(1)}" width="${bw.toFixed(1)}"
+          height="${Math.max(0.8, Math.abs(y(b.o) - y(b.c))).toFixed(1)}" fill="currentColor" stroke="none" opacity=".55"/>`;
+  }).join('');
+
+  const line = (p, colour, label, dash = '4 3') => p == null ? '' :
+    `<line x1="0" x2="${W}" y1="${y(p).toFixed(1)}" y2="${y(p).toFixed(1)}" stroke="${colour}" stroke-width="1" stroke-dasharray="${dash}"/>
+     <text x="4" y="${(y(p) - 3).toFixed(1)}" fill="${colour}">${label} ${p.toFixed(2)}</text>`;
+
+  const entryIdx = r.entry ? bars.findIndex(b => b.t >= r.entry.ts) : -1;
+  const exitIdx = r.entry && r.walk ? entryIdx + r.walk.barIdx : -1;
+  const mark = (i, colour, label) => i < 0 || i >= bars.length ? '' :
+    `<line x1="${x(i).toFixed(1)}" x2="${x(i).toFixed(1)}" y1="0" y2="${H}" stroke="${colour}" stroke-width="1" opacity=".55"/>
+     <text x="${(x(i) + 3).toFixed(1)}" y="${H - 4}" fill="${colour}">${label}</text>`;
+
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+    aria-label="episode chart with entry, stop, target and runway">
+    ${line(lv.runway, '#8A93A0', `runway ${r.levels?.runwayName ?? ''}`, '2 4')}
+    ${line(lv.target, '#3FB68B', 'target')}
+    ${line(lv.stop, '#D08048', 'stop')}
+    ${candles}
+    ${mark(entryIdx, '#E8EAED', 'entry')}
+    ${mark(exitIdx, r.verdict === 'WIN' ? '#3FB68B' : r.verdict === 'LOSS' ? '#D08048' : '#C9A961', 'exit')}
+  </svg>`;
+}
+
+function simPnl(r) {
+  if (!r.walk) return null;
+  const n = byT(r.ticker); if (!n) return null;
+  const { equity, hwm } = state.journal.equity();
+  const a = allocate(state.cfg, { equity, hwm, open: [] },
+    { ticker: r.ticker, dir: r.state.toLowerCase(), beta: n.beta_60d, cluster: n.cluster,
+      atrPct: n.atr_pct_14d, medianAtrPct: state.medianAtr });
+  const levered = r.walk.underlyingPct * state.cfg.leverage;
+  const eqKnown = state.journal.state().startingEquity != null;
+  return { sizeFrac: a.sizeFrac, levered,
+    cash: eqKnown ? equity * a.sizeFrac * levered / 100 : null };
+}
+
+function renderSim() {
+  const { result: r, scan } = state.sim;
+  const body = $('#simbody');
+  if (scan) {
+    const rows = (scan.results ?? []).map(x => {
+      const v = x.verdict ?? (x.state === 'NO DATA' || x.state === 'ERROR' ? x.state : 'no setup');
+      const cls = { WIN: 'up', LOSS: 'dn' }[x.verdict] ?? 'dim';
+      return `<tr><td>${x.ticker}</td><td><span class="state ${x.state}">${x.state}</span></td>
+        <td class="${cls}">${v}</td>
+        <td class="num">${x.walk ? x.walk.underlyingPct.toFixed(2) + '%' : '—'}</td>
+        <td class="num">${x.walk ? (x.walk.underlyingPct * state.cfg.leverage).toFixed(1) + '%' : '—'}</td>
+        <td class="dim">${x.resolution ?? '—'}</td>
+        <td class="dim">${Object.keys(x.errors ?? {}).length ? Object.keys(x.errors).join(', ') : ''}</td></tr>`;
+    }).join('');
+    const q = (scan.results ?? []).filter(x => x.qualified).length;
+    body.className = '';
+    body.innerHTML = `<div class="simstamp">${scan.done ?? 0}/${scan.total ?? 0} names · ${q} qualifying setup${q === 1 ? '' : 's'}
+      · preset ${presetHash(state.cfg)}${scan.cancelled ? ' · CANCELLED' : ''}</div>
+      <table><thead><tr><th>Name</th><th>State</th><th>Verdict</th><th class="num">Underlying</th>
+      <th class="num">Levered</th><th>Res.</th><th>Errors</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return;
+  }
+  if (!r) return;
+  body.className = '';
+  const pnl = simPnl(r);
+  const errs = Object.entries(r.errors ?? {});
+  const verdictCls = r.verdict === 'TIME-OUT' ? 'TIMEOUT' : (r.verdict ?? 'NONE');
+  body.innerHTML = `
+    <div class="verdict">
+      <span class="vd ${verdictCls}">${r.verdict ?? 'NO SETUP'}</span>
+      <span class="state ${r.state}">${r.state}</span>
+      <span class="simnums">
+        ${r.walk ? `<span>underlying <b class="${r.walk.underlyingPct >= 0 ? 'up' : 'dn'}">${r.walk.underlyingPct.toFixed(2)}%</b></span>
+          <span>levered <b class="${r.walk.underlyingPct >= 0 ? 'up' : 'dn'}">${(r.walk.underlyingPct * state.cfg.leverage).toFixed(1)}%</b></span>
+          <span>MAE ${r.walk.mae.toFixed(2)}pp · MFE ${r.walk.mfe.toFixed(2)}pp</span>
+          ${pnl ? `<span>on ${(pnl.sizeFrac * 100).toFixed(2)}% of equity${pnl.cash != null ? ` → <b class="${pnl.cash >= 0 ? 'up' : 'dn'}">${fmtUsd(pnl.cash)}</b>` : ''}</span>` : ''}`
+        : '<span class="dim">no qualifying setup at this moment — criteria below</span>'}
+      </span>
+    </div>
+    <div class="simstamp">${r.ticker} · ${r.date} ${r.timeCET} CET · preset ${r.presetHash} · ${r.resolution ?? '—'} bars · ${r.provider}</div>
+    ${(r.notEvaluated ?? []).length ? `<div class="notev">not evaluated: ${r.notEvaluated.map(x => `${x.id} (${x.why})`).join(' · ')}</div>` : ''}
+    ${errs.length ? `<div class="notev">provider errors: ${errs.map(([k, v]) => `${k}: ${v}`).join(' · ')}</div>` : ''}
+    ${episodeChart(r)}
+    <div class="crit">${(r.criteria ?? []).map(c => {
+      const mark = c.enabled === false ? '<span class="off">off</span>' : c.pass ? '<span class="ok">✓</span>' : '<span class="no">✗</span>';
+      const val = typeof c.value === 'number' ? c.value.toFixed(2) : String(c.value);
+      return `<div>${c.id}</div><div>${c.detail}</div><div>${mark} ${val}</div>`;
+    }).join('')}</div>`;
+}
+
+// FR-B7: the caveats are not a footnote, they are part of the result.
+function renderSimCaveats() {
+  const r = state.sim.result;
+  const res = r?.resolution ?? '5min';
+  $('#simcaveats').innerHTML = `<div class="caveats">
+    <b>This is an illustration of mechanics, not a backtest.</b>
+    Today's watchlist is applied to a past date, so the names carry survivorship bias — they were
+    selected knowing they survived. Bars are ${res}${res === '1h' ? ' (5-minute history unavailable for this date)' : ''},
+    and where one bar's range spans both stop and target the engine assumes <b>the stop was hit first</b>
+    — a conservative rule that binds far less often at 5-minute than at 1-hour resolution.
+    VWAP is rebuilt from bar data rather than the live tape. No slippage, financing or fee modelling.
+    Provider price adjustments for splits and dividends are provider-dependent.
+    Every result is stamped with its preset hash and resolution; results under different hashes are not comparable.
+  </div>`;
 }
 
 function exportJournal() {

@@ -73,3 +73,28 @@ test('journal: open→excursion→close→kpis→export/import round-trip', () =
   assert.equal(J.state().closed.length, 1);
   assert.ok(J.exportCSV().includes('DELL,long'));
 });
+
+// A sub-millisecond gap must not cost a macrotask: background tabs clamp every timer to 1s,
+// which is what made a 20-name demo scan take 20 seconds of pure waiting.
+test('queue: an unthrottled queue schedules without yielding to a timer', async () => {
+  const q = makeQueue({ perMinute: 1e6, now: () => Date.now() });
+  let timers = 0;
+  const realTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms) => { timers += 1; return realTimeout(fn, ms); };
+  try {
+    for (let i = 0; i < 25; i++) await q.schedule(`k${i}`, 0, async () => i);
+  } finally { globalThis.setTimeout = realTimeout; }
+  assert.equal(timers, 0, `queue used ${timers} timers for 25 instant calls`);
+  assert.equal(q.budget().used, 25);
+});
+
+test('queue: a real throttle still spaces calls', async () => {
+  let t = 0; const q = makeQueue({ perMinute: 60, now: () => t });   // 1000ms gap
+  const seen = [];
+  await q.schedule('a', 0, async () => { seen.push(t); return 1; });
+  const p = q.schedule('b', 0, async () => { seen.push(t); return 2; });
+  await new Promise(r => setTimeout(r, 20));
+  t += 1000;                                                         // clock advances past the gap
+  await p;
+  assert.equal(seen.length, 2);
+});

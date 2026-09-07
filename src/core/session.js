@@ -1,5 +1,6 @@
 // Session-window state in CET (FRD E6, FR-A13). Pure over a Date.
-const cetParts = d => { const s = d.toLocaleString('sv-SE', { timeZone: 'Europe/Berlin' }); return { hm: s.slice(11,16), dow: new Date(s.slice(0,10)).getUTCDay() }; };
+import { cetStamp } from './tz.js';
+const cetParts = d => { const s = cetStamp(d.getTime()); return { hm: s.slice(11,16), dow: new Date(s.slice(0,10)).getUTCDay() }; };
 export function sessionState(now, cfg) {
   const { hm, dow } = cetParts(now);
   if (dow === 0 || dow === 6) return 'CLOSED';

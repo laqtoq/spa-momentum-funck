@@ -121,3 +121,23 @@ tr.al-time{box-shadow:inset 3px 0 0 var(--armed)}
 .kbar i{position:absolute;top:0;bottom:0;background:var(--long)}
 .kbar i.WARN{background:var(--armed)} .kbar i.TRIGGERED{background:var(--short)} .kbar i.PENDING{background:var(--idle)}
 .kbar u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+
+/* Module B — simulator (FR-B5) */
+#simbody .verdict{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin:10px 0 8px}
+.vd{font:20px var(--mono);letter-spacing:.06em;padding:3px 12px;border-radius:4px}
+.vd.WIN{background:color-mix(in srgb,var(--long) 22%,transparent);color:var(--long)}
+.vd.LOSS{background:color-mix(in srgb,var(--short) 22%,transparent);color:var(--short)}
+.vd\[TIME-OUT\],.vd.TIMEOUT{background:color-mix(in srgb,var(--armed) 20%,transparent);color:var(--armed)}
+.vd.NONE{color:var(--idle);border:1px dashed var(--idle)}
+.simnums{display:flex;gap:18px;flex-wrap:wrap;font:13px var(--mono);font-variant-numeric:tabular-nums}
+.simnums b{font-weight:600}
+.simstamp{font:10px var(--mono);color:var(--muted);margin-top:2px}
+.chart{width:100%;height:auto;display:block;margin:10px 0;background:var(--bg);border:1px solid var(--edge);border-radius:4px}
+.chart .up{stroke:var(--long)} .chart .dn{stroke:var(--short)}
+.chart text{fill:var(--muted);font:9px var(--mono)}
+.notev{font:10px var(--mono);color:var(--armed);margin-top:6px}
+#sim table{margin-top:10px}
+#sim tbody tr{cursor:pointer}
+.caveats{font-size:10px;line-height:1.6;color:var(--muted);font-family:var(--mono);margin-top:10px;
+  border-top:1px solid var(--edge);padding-top:8px}
+.caveats b{color:var(--armed);font-weight:600}

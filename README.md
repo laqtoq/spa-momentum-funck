@@ -24,11 +24,11 @@ pivot recorded as FRD compromise C9.)
 - `public/watchlist.json`, `public/key_dates.json` — versioned screen outputs (FR-A14)
 
 ## Status
-- [x] Engine (20 tests) · [x] Core (5 tests) · [x] Adapters (9 tests) · [x] Live orchestrator (12 tests) · [x] Monitor (9 tests) · [x] Buckets (9 tests) · [x] KPIs (13 tests) · [x] Staged demo (6 tests) · [x] Vite build
+- [x] Engine (20 tests) · [x] Core (5 tests) · [x] Adapters (9 tests) · [x] Live orchestrator (12 tests) · [x] Monitor (9 tests) · [x] Buckets (9 tests) · [x] KPIs (13 tests) · [x] Simulator (22 tests) · [x] Staged demo (6 tests) · [x] Vite build
 - [x] Provider pivot (FRD v1.6, C9) · [x] Spike v2 passed with real keys (2026-08-04)
 - [x] Live wiring behind keys (FR-A15–A18; market-hours click-through pending)
 - [x] Position monitor + fill capture (FR-A16, FR-D7–D10) · [x] Bucket board + KPI & kill-criteria panel (FR-D3/D4/D11)
-- [ ] Module B simulator · [ ] FR-D6 what-if, FR-D12 trade table · [ ] Module C UI
+- [x] Module B point-in-time simulator + scan mode (FR-B1–B8) · [ ] FR-D6 what-if, FR-D12 trade table · [ ] Module C UI
 
 Demo mode is a staged snapshot frozen at **Tue 4 Aug 2026, 16:30 CET** (inside the entry window), so the
 desk demonstrates itself at any hour: DELL LONG, LITE and PWR ARMED, the rest IDLE for a different named
@@ -36,4 +36,4 @@ reason each, and every short-bias name held back by the regime gate. The states 
 signal engine from canned bars — `test/demo.test.js` asserts the whole map — and every panel is labelled
 DEMO SNAPSHOT with its as-of moment. Live mode runs on the wall clock as before. See HANDOVER §5 and D9.
 
-Tests: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/engine/monitor.test.js test/engine/buckets.test.js test/engine/kpis.test.js test/adapters.test.js test/live.test.js test/demo.test.js`
+Tests: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/engine/monitor.test.js test/engine/buckets.test.js test/engine/kpis.test.js test/engine/simulate.test.js test/adapters.test.js test/live.test.js test/sim.test.js test/demo.test.js`

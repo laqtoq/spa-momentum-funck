@@ -17,3 +17,18 @@ export async function nextEarningsMap(tickers, apiKey, f = fetch, today = new Da
   };
   return Object.fromEntries(await Promise.all(tickers.map(one)));
 }
+
+// Earnings nearest a historical date, for Module B blackout evaluation (FR-B2).
+// Returns the date string when one falls in the window, null when the window is genuinely
+// empty (a known answer), and throws on transport failure so the caller can mark E7
+// "not evaluated" rather than treating a failed lookup as "no earnings".
+export async function earningsNear(ticker, dateISO, apiKey, f = fetch, windowDays = 10) {
+  const at = Date.parse(dateISO + 'T12:00:00Z');
+  const day = ms => new Date(ms).toISOString().slice(0, 10);
+  const from = day(at - windowDays * 86400000), to = day(at + windowDays * 86400000);
+  const r = await f(`${BASE}/calendar/earnings?from=${from}&to=${to}&symbol=${ticker}&token=${apiKey}`);
+  if (!r.ok) throw new Error(`Finnhub earnings ${ticker} ${r.status}: ${(await r.text()).slice(0, 140)}`);
+  const rows = (await r.json()).earningsCalendar ?? [];
+  if (!rows.length) return null;
+  return rows.map(x => x.date).sort((a, b) => Math.abs(Date.parse(a) - at) - Math.abs(Date.parse(b) - at))[0];
+}

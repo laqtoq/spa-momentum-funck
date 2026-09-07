@@ -53,6 +53,23 @@
     <div id="kpibody"></div>
     <div class="prov">KPIs FRD 5.5 · kill criteria FRD 5.3 · computed from the journal, never from the tape · <span id="prov-kpi">DEMO</span></div>
   </section>
+  <section class="panel" id="sim">
+    <h2>Module B — point-in-time simulator <small id="simmeta"></small></h2>
+    <div class="fillgrid">
+      <div><label>date</label><input id="s_date" type="date" /></div>
+      <div><label>entry time (CET)</label><input id="s_time" type="time" value="16:00" /></div>
+      <div><label>name</label><select id="s_ticker"></select></div>
+      <div><label>preset</label><input id="s_preset" readonly /></div>
+    </div>
+    <div class="fillactions">
+      <button id="s_run">Run</button>
+      <button class="mini" id="s_scan">Scan watchlist</button>
+      <button class="mini" id="s_cancel">Cancel</button>
+      <span class="dim" id="s_progress"></span>
+    </div>
+    <div id="simbody" class="dim">Pick a moment and run — the engine evaluates it using only bars that had closed by then.</div>
+    <div class="prov" id="simcaveats"></div>
+  </section>
   <section class="panel"><h2>Desk note</h2><div id="note" class="dim">Provide an OpenRouter key for live notes; demo shows structure.</div></section>
 </main>
 <script type="module" src="./src/main.js"></script>

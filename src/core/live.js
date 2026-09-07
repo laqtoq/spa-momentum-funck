@@ -4,6 +4,7 @@ import { makeAggregator } from './aggregator.js';
 import { evaluate } from '../engine/signal.js';
 import { monitorPosition, excursion } from '../engine/monitor.js';
 import { sessionState, minutesToHardClose } from './session.js';
+import { nyStamp } from './tz.js';
 
 const DAY = 86400000;
 
@@ -18,7 +19,7 @@ export function inBlackout(earnDate, now, cfg) {
 }
 
 const nyParts = tMs => {
-  const s = new Date(tMs).toLocaleString('sv-SE', { timeZone: 'America/New_York' });
+  const s = nyStamp(tMs);
   return { day: s.slice(0, 10), mins: +s.slice(11, 13) * 60 + +s.slice(14, 16) };
 };
 const nyDayOf = tMs => nyParts(tMs).day;

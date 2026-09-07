@@ -102,3 +102,79 @@ export function demoContext(data, n, cfg, now = DEMO_ASOF) {
     inEntryWindow: sessionState(now, cfg) === 'ENTRY_OPEN',
     inBlackout: false, blackoutOverride: false };
 }
+
+// ---- Module B demo episode (decision D9) ----
+// A staged historical moment so the simulator demonstrates itself keylessly. These providers
+// have the same shape as the live ones, so demo and live run the identical orchestrator and
+// the identical engine — only the bytes differ.
+
+export const DEMO_SIM = { date: '2026-07-28', timeCET: '16:00' };   // Tue, 30 min into the US session
+const SIM_MOMENT = Date.parse('2026-07-28T14:00:00Z');
+// Outcomes staged to show all three verdicts; every other name simply does not set up.
+const SIM_OUTCOME = { DELL: 'win', LITE: 'both', PWR: 'flat' };
+
+function simSeries(ticker, p0) {
+  const outcome = SIM_OUTCOME[ticker];
+  const setsUp = !!outcome;
+  const b = (t, c, o, h, l, v) => ({ t, o, h, l, c, v });
+
+  // 1h structure: RSI ≈ 55 when the name sets up, ≈ 78 (overbought, E1 fails) when it does not.
+  const g = setsUp ? 0.0055 : 0.0078, l = setsUp ? 0.0045 : 0.0022;
+  const bars1h = []; let c = p0;
+  for (let i = 0; i < 60; i++) {
+    c *= i % 2 ? (1 - l) : (1 + g);
+    bars1h.push(b(SIM_MOMENT - (60 - i) * HOUR, c, c * 0.999, c * 1.006, c * 0.994, 1e6));
+  }
+  // Daily: 25 completed sessions leaving overhead supply for E4, then the simulated session's
+  // own bar — which simContext must drop, since its high has not happened yet at 16:00 CET.
+  const daily = [];
+  for (let i = 25; i >= 1; i--) {
+    const t = Date.parse('2026-07-28T20:00:00Z') - i * 86400000;
+    daily.push(b(t, p0 * 0.99, p0 * 0.98, p0 * 1.06, p0 * 0.96, 1e7));
+  }
+  daily.push(b(Date.parse('2026-07-28T20:00:00Z'), p0 * 1.25, p0, p0 * 1.4, p0 * 0.8, 1e7));
+
+  // 5-minute: the prior session for the relative-volume baseline, then today into the moment.
+  const bars5m = [];
+  const prior = Date.parse('2026-07-27T13:30:00Z');
+  for (let i = 0; i < 78; i++) bars5m.push(b(prior + i * FIVE, p0 * 0.99, p0 * 0.99, p0 * 0.992, p0 * 0.988, 90000));
+  const open = Date.parse('2026-07-28T13:30:00Z');
+  let q = p0 * 0.994;
+  for (let i = 0; open + i * FIVE < SIM_MOMENT - FIVE; i++) {
+    q *= 1.0006;
+    bars5m.push(b(open + i * FIVE, q, q * 0.9995, q * 1.0012, q * 0.9988, 96000));
+  }
+  const last = bars5m.at(-1);
+  const trigger = setsUp ? last.h * 1.004 : last.c * 0.998;      // break the prior 5m high, or fade
+  bars5m.push(b(SIM_MOMENT - FIVE, trigger, last.c, Math.max(trigger, last.c) * 1.0005,
+    Math.min(trigger, last.c) * 0.9995, setsUp ? 230000 : 70000));
+
+  // Forward bars — the outcome the walk discovers.
+  const e = bars5m.at(-1).c;
+  for (let i = 0; i < 90; i++) {
+    const t = SIM_MOMENT + i * FIVE;
+    if (outcome === 'win' && i === 6)       bars5m.push(b(t, e * 1.035, e, e * 1.041, e * 0.9995, 150000));
+    else if (outcome === 'both' && i === 4) bars5m.push(b(t, e * 1.02,  e, e * 1.041, e * 0.985,  180000));
+    else                                     bars5m.push(b(t, e, e, e * 1.0008, e * 0.9992, 120000));
+  }
+  return { bars5m, bars1h, daily };
+}
+
+export function demoSimProviders(watchlist) {
+  const priceOf = t => watchlist.names.find(n => n.ticker === t)?.close_at_screen ?? 100;
+  const cache = {};
+  return {
+    tdBars: async (sym, interval) => {
+      if (sym === 'SPY') {
+        const out = [];
+        for (let i = 40; i >= 1; i--)                            // rising, so G1 lets longs through
+          out.push({ t: Date.parse('2026-07-28T20:00:00Z') - i * 86400000, o: 700, h: 705, l: 695, c: 700 + (40 - i) * 0.6, v: 1e8 });
+        return out;
+      }
+      const s = cache[sym] ??= simSeries(sym, priceOf(sym));
+      return interval === '5min' ? s.bars5m : interval === '1h' ? s.bars1h : s.daily;
+    },
+    vixAt: async () => 19.8,
+    earningsAt: async () => null,       // known-empty window, so E7 is evaluated rather than skipped
+  };
+}
