@@ -6,8 +6,11 @@ export function makeJournal(storage) {
   return {
     state: load,
     setStartingEquity(e) { const j = load(); j.startingEquity = e; save(j); },
-    openPosition(fill) { const j = load(); j.open.push({ ...fill, id: `${fill.ticker}-${fill.entryTs}`, mae: 0, mfe: 0, edited: false }); save(j); return j.open.at(-1).id; },
+    openPosition(fill) { const j = load(); j.open.push({ ...fill, id: `${fill.ticker}-${fill.entryTs}`, mae: 0, mfe: 0, edited: fill.edited ?? false }); save(j); return j.open.at(-1).id; },
     updateExcursion(id, mae, mfe) { const j = load(); const p = j.open.find(x => x.id === id); if (p) { p.mae = Math.max(p.mae, mae); p.mfe = Math.max(p.mfe, mfe); save(j); } },
+    // FR-D8: excursions measured across a stream gap are approximate; the flag rides with the trade.
+    markApprox(id) { const j = load(); const p = j.open.find(x => x.id === id); if (p && !p.approx) { p.approx = true; save(j); } },
+    updateOpen(id, patch) { const j = load(); const p = j.open.find(x => x.id === id); if (p) { Object.assign(p, patch, { edited: true }); save(j); } },
     closePosition(id, exit) { const j = load(); const i = j.open.findIndex(x => x.id === id); if (i < 0) return null;
       const p = j.open.splice(i, 1)[0]; const dirSign = p.dir === 'long' ? 1 : -1;
       const underlyingPct = dirSign * (exit.exitPrice - p.entryPrice) / p.entryPrice * 100;

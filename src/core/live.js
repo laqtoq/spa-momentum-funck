@@ -2,6 +2,7 @@
 // so the whole data plane is testable with fakes. main.js is DOM glue over `state`.
 import { makeAggregator } from './aggregator.js';
 import { evaluate } from '../engine/signal.js';
+import { monitorPosition, excursion } from '../engine/monitor.js';
 import { sessionState, minutesToHardClose } from './session.js';
 
 const DAY = 86400000;
@@ -43,11 +44,12 @@ export function slotBaselineFrom(bars5m, todayKeyNY) {
 
 // ---- Orchestrator (FR-A15–A18). All I/O via injected deps; UI renders from `state`. ----
 export function startLive({ keys, watchlist, cfg }, deps, onUpdate = () => {}) {
-  const { openStream, regimeQuotes, tdQuotes, tdBars, earningsMap, queue, now = () => new Date() } = deps;
+  const { openStream, regimeQuotes, tdQuotes, tdBars, earningsMap, queue, journal, now = () => new Date() } = deps;
   const tickers = watchlist.names.map(n => n.ticker);
   const byTicker = Object.fromEntries(watchlist.names.map(n => [n.ticker, n]));
   const aggs = Object.fromEntries([...tickers, 'SPY'].map(t => [t, makeAggregator()]));
   const backfilled = {};                       // {[t]: today's bars5m fetched on reconnect}
+  let openByTicker = {};                       // ticker → open positions, cached so ticks avoid a storage read
 
   const state = {
     stream: { status: 'CONNECTING' }, lastTickAge: () => stream.lastTickAge(),
@@ -59,8 +61,37 @@ export function startLive({ keys, watchlist, cfg }, deps, onUpdate = () => {}) {
     bars5m: t => [...(backfilled[t] ?? []), ...aggs[t].bars5m()],
     vwap: t => aggs[t].vwap(),
     reeval, setPause,
+    book, openPosition, closePosition,
   };
   const emit = tag => onUpdate(tag, state);
+
+  // ---- Module D book, live face (FR-A16 / FR-D7–D9) ----
+  function refreshBook() {
+    openByTicker = {};
+    for (const p of journal?.state().open ?? []) (openByTicker[p.ticker] ??= []).push(p);
+  }
+  // Each open position priced and measured against its stop, target and time limits.
+  function book() {
+    const t = now();
+    return (journal?.state().open ?? []).map(p => {
+      const livePrice = state.live[p.ticker]?.p ?? state.quotes[p.ticker]?.price ?? null;
+      return { ...p, livePrice, mon: livePrice == null ? null : monitorPosition(p, livePrice, t, cfg) };
+    });
+  }
+  function openPosition(fill) { const id = journal.openPosition(fill); refreshBook(); emit('book'); return id; }
+  function closePosition(id, exit) { const c = journal.closePosition(id, exit); refreshBook(); emit('book'); return c; }
+
+  // FR-D8: running MAE/MFE off the tape. Only new extremes hit storage — ticks are hot.
+  function trackExcursion(sym, price) {
+    for (const p of openByTicker[sym] ?? []) {
+      const { mae, mfe } = excursion(p, price);
+      if (mae > p.mae || mfe > p.mfe) {
+        p.mae = Math.max(p.mae, mae); p.mfe = Math.max(p.mfe, mfe);
+        journal.updateExcursion(p.id, p.mae, p.mfe);
+      }
+    }
+  }
+  refreshBook();
 
   function assembleCtx(t) {
     const n = byTicker[t], hb = state.structure[t], db = state.daily[t], base = state.baselines[t];
@@ -94,8 +125,12 @@ export function startLive({ keys, watchlist, cfg }, deps, onUpdate = () => {}) {
   let lastStatus = null;
   const stream = openStream([...tickers, 'SPY'], { keyId: keys.alpacaId, secret: keys.alpacaSecret },
     tr => { aggs[tr.sym]?.addTrade({ p: tr.p, v: tr.v, t: tr.t });
-      if (tr.sym === 'SPY') state.spyLive = tr.p; else state.live[tr.sym] = { p: tr.p, t: tr.t }; },
+      if (tr.sym === 'SPY') state.spyLive = tr.p;
+      else { state.live[tr.sym] = { p: tr.p, t: tr.t }; trackExcursion(tr.sym, tr.p); }
+      emit('tick'); },
     status => { const was = lastStatus; lastStatus = status; state.stream.status = status;
+      // FR-D8: excursions spanning a stream gap are approximations — flag the trades that were open.
+      if (status !== 'CONNECTED') { for (const p of journal?.state().open ?? []) journal.markApprox(p.id); refreshBook(); }
       if (was === 'DEGRADED' && status === 'CONNECTED') backfill();
       emit('stream'); });
 

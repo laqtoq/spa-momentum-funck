@@ -7,6 +7,9 @@ node_modules
 dist
 .claude
 
+# Deliverable drafts kept out of the public repo until they are finished and human-edited.
+docs/ic_deck_plan.md
+
 # Local API keys. Never commit these — this repo is public.
 .env
 .env.*

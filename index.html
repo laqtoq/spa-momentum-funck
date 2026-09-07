@@ -33,6 +33,16 @@
     </tr></thead><tbody></tbody></table>
     <div class="prov">Prices: <span id="prov-price">DEMO</span> · Reference: <span id="prov-ref">DEMO</span></div>
   </section>
+  <section class="panel" id="monitor">
+    <h2>Position monitor <small id="bookmeta"></small>
+      <button id="equity" class="ghost" type="button">equity</button>
+      <button id="mute" class="ghost" type="button">alerts on</button>
+      <button id="expjson" class="ghost" type="button">export</button>
+    </h2>
+    <div id="monbody" class="dim">No open positions. Select a name with a signal to record an entry fill.</div>
+    <div id="fillform"></div>
+    <div class="prov">Live price: <span id="prov-mon">DEMO</span> · alerts inform only — every exit is executed on the broker platform, never by this app</div>
+  </section>
   <section class="cols">
     <div class="panel" id="drill"><h2>Drill-down</h2><div id="drillbody" class="dim">Select a name.</div></div>
     <div class="panel" id="risk"><h2>Risk / Allocator</h2><div id="riskbody"></div></div>
