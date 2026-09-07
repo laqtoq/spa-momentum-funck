@@ -70,6 +70,32 @@
     <div id="simbody" class="dim">Pick a moment and run — the engine evaluates it using only bars that had closed by then.</div>
     <div class="prov" id="simcaveats"></div>
   </section>
+  <section class="panel" id="wb">
+    <h2>Module C — configuration workbench <small id="wbmeta"></small>
+      <button id="c_exp" class="ghost" type="button">export presets</button>
+      <button id="c_imp" class="ghost" type="button">import</button>
+    </h2>
+    <div id="c_warn"></div>
+    <div id="c_msg"></div>
+    <div class="wbcols">
+      <div>
+        <h3>Parameters <small>Module A always evaluates the committed baseline — these edits live in B and C only (FRD 4.7 §1)</small></h3>
+        <div id="c_params"></div>
+      </div>
+      <div>
+        <h3>Presets</h3>
+        <div id="c_presets"></div>
+        <h3>Deviations from baseline</h3>
+        <div id="c_diff"></div>
+        <h3>Optimization log</h3>
+        <div id="c_log"></div>
+      </div>
+    </div>
+    <h3>Batch runner <small>date list × presets, through the FR-A5 queue</small></h3>
+    <div id="c_batch"></div>
+    <div id="c_results"></div>
+    <input type="file" id="c_file" accept="application/json" hidden />
+  </section>
   <section class="panel"><h2>Desk note</h2><div id="note" class="dim">Provide an OpenRouter key for live notes; demo shows structure.</div></section>
 </main>
 <script type="module" src="./src/main.js"></script>

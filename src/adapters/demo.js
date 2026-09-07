@@ -7,6 +7,7 @@
 // means a captured moment; the clock is part of that capture. Every panel still carries a DEMO
 // provenance label, and the engine is untouched — states here are produced by the real evaluate().
 import { sessionState, minutesToHardClose } from '../core/session.js';
+import { cetStamp } from '../core/tz.js';
 
 // Tue 4 Aug 2026, 16:30 CET — inside the 15:45–18:00 entry window, US cash session open,
 // and the screening date of the committed watchlist.
@@ -109,12 +110,22 @@ export function demoContext(data, n, cfg, now = DEMO_ASOF) {
 // the identical engine — only the bytes differ.
 
 export const DEMO_SIM = { date: '2026-07-28', timeCET: '16:00' };   // Tue, 30 min into the US session
-const SIM_MOMENT = Date.parse('2026-07-28T14:00:00Z');
-// Outcomes staged to show all three verdicts; every other name simply does not set up.
+// Outcomes staged on the canonical demo date so all three verdicts are demonstrable; other dates
+// vary deterministically per (ticker, date) so a Module C batch across five dates is not five
+// identical rows.
 const SIM_OUTCOME = { DELL: 'win', LITE: 'both', PWR: 'flat' };
+const dayShift = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 
-function simSeries(ticker, p0) {
-  const outcome = SIM_OUTCOME[ticker];
+function outcomeFor(ticker, dateISO) {
+  if (dateISO === DEMO_SIM.date) return SIM_OUTCOME[ticker] ?? null;
+  const h = hash(ticker + dateISO);
+  if (h % 5 !== 0) return null;                       // most names do not set up on most days
+  return ['win', 'both', 'flat'][(h >> 3) % 3];
+}
+
+function simSeries(ticker, p0, dateISO) {
+  const moment = Date.parse(`${dateISO}T${DEMO_SIM.timeCET}:00Z`) - cetOffsetMin(dateISO) * 60000;
+  const outcome = outcomeFor(ticker, dateISO);
   const setsUp = !!outcome;
   const b = (t, c, o, h, l, v) => ({ t, o, h, l, c, v });
 
@@ -123,36 +134,34 @@ function simSeries(ticker, p0) {
   const bars1h = []; let c = p0;
   for (let i = 0; i < 60; i++) {
     c *= i % 2 ? (1 - l) : (1 + g);
-    bars1h.push(b(SIM_MOMENT - (60 - i) * HOUR, c, c * 0.999, c * 1.006, c * 0.994, 1e6));
+    bars1h.push(b(moment - (60 - i) * HOUR, c, c * 0.999, c * 1.006, c * 0.994, 1e6));
   }
-  // Daily: 25 completed sessions leaving overhead supply for E4, then the simulated session's
-  // own bar — which simContext must drop, since its high has not happened yet at 16:00 CET.
+  // Daily: completed sessions leaving overhead supply for E4, then the simulated session's own
+  // bar — which simContext must drop, since its high has not happened yet at 16:00 CET.
+  const dayClose = Date.parse(dateISO + 'T20:00:00Z');
   const daily = [];
-  for (let i = 25; i >= 1; i--) {
-    const t = Date.parse('2026-07-28T20:00:00Z') - i * 86400000;
-    daily.push(b(t, p0 * 0.99, p0 * 0.98, p0 * 1.06, p0 * 0.96, 1e7));
-  }
-  daily.push(b(Date.parse('2026-07-28T20:00:00Z'), p0 * 1.25, p0, p0 * 1.4, p0 * 0.8, 1e7));
+  for (let i = 25; i >= 1; i--) daily.push(b(dayClose - i * 86400000, p0 * 0.99, p0 * 0.98, p0 * 1.06, p0 * 0.96, 1e7));
+  daily.push(b(dayClose, p0 * 1.25, p0, p0 * 1.4, p0 * 0.8, 1e7));
 
   // 5-minute: the prior session for the relative-volume baseline, then today into the moment.
   const bars5m = [];
-  const prior = Date.parse('2026-07-27T13:30:00Z');
+  const sessionOpen = Date.parse(dateISO + 'T13:30:00Z');
+  const prior = sessionOpen - 86400000;
   for (let i = 0; i < 78; i++) bars5m.push(b(prior + i * FIVE, p0 * 0.99, p0 * 0.99, p0 * 0.992, p0 * 0.988, 90000));
-  const open = Date.parse('2026-07-28T13:30:00Z');
   let q = p0 * 0.994;
-  for (let i = 0; open + i * FIVE < SIM_MOMENT - FIVE; i++) {
+  for (let i = 0; sessionOpen + i * FIVE < moment - FIVE; i++) {
     q *= 1.0006;
-    bars5m.push(b(open + i * FIVE, q, q * 0.9995, q * 1.0012, q * 0.9988, 96000));
+    bars5m.push(b(sessionOpen + i * FIVE, q, q * 0.9995, q * 1.0012, q * 0.9988, 96000));
   }
   const last = bars5m.at(-1);
   const trigger = setsUp ? last.h * 1.004 : last.c * 0.998;      // break the prior 5m high, or fade
-  bars5m.push(b(SIM_MOMENT - FIVE, trigger, last.c, Math.max(trigger, last.c) * 1.0005,
+  bars5m.push(b(moment - FIVE, trigger, last.c, Math.max(trigger, last.c) * 1.0005,
     Math.min(trigger, last.c) * 0.9995, setsUp ? 230000 : 70000));
 
   // Forward bars — the outcome the walk discovers.
   const e = bars5m.at(-1).c;
   for (let i = 0; i < 90; i++) {
-    const t = SIM_MOMENT + i * FIVE;
+    const t = moment + i * FIVE;
     if (outcome === 'win' && i === 6)       bars5m.push(b(t, e * 1.035, e, e * 1.041, e * 0.9995, 150000));
     else if (outcome === 'both' && i === 4) bars5m.push(b(t, e * 1.02,  e, e * 1.041, e * 0.985,  180000));
     else                                     bars5m.push(b(t, e, e, e * 1.0008, e * 0.9992, 120000));
@@ -160,18 +169,30 @@ function simSeries(ticker, p0) {
   return { bars5m, bars1h, daily };
 }
 
+// Europe/Berlin offset on a date, so the demo moment lands at 16:00 CET year-round.
+function cetOffsetMin(dateISO) {
+  const probe = Date.parse(dateISO + 'T12:00:00Z');
+  return (Date.parse(cetStamp(probe).replace(' ', 'T') + 'Z') - probe) / 60000;
+}
+
 export function demoSimProviders(watchlist) {
   const priceOf = t => watchlist.names.find(n => n.ticker === t)?.close_at_screen ?? 100;
   const cache = {};
+  // RANGE_AFTER_DAYS mirrors sim.js: the orchestrator asks for bars a few days past the
+  // simulated date, so the date under test is end_date minus that pad.
+  const AFTER = 6;
   return {
-    tdBars: async (sym, interval) => {
+    tdBars: async (sym, interval, size, range) => {
       if (sym === 'SPY') {
+        const end = range?.end_date ?? DEMO_SIM.date;
         const out = [];
         for (let i = 40; i >= 1; i--)                            // rising, so G1 lets longs through
-          out.push({ t: Date.parse('2026-07-28T20:00:00Z') - i * 86400000, o: 700, h: 705, l: 695, c: 700 + (40 - i) * 0.6, v: 1e8 });
+          out.push({ t: Date.parse(end + 'T20:00:00Z') - i * 86400000, o: 700, h: 705, l: 695,
+                     c: 700 + (40 - i) * 0.6, v: 1e8 });
         return out;
       }
-      const s = cache[sym] ??= simSeries(sym, priceOf(sym));
+      const dateISO = range?.end_date ? dayShift(range.end_date, -AFTER) : DEMO_SIM.date;
+      const s = (cache[`${sym}|${dateISO}`] ??= simSeries(sym, priceOf(sym), dateISO));
       return interval === '5min' ? s.bars5m : interval === '1h' ? s.bars1h : s.daily;
     },
     vixAt: async () => 19.8,

@@ -9,6 +9,9 @@ import { makeJournal } from './core/store.js';
 import { demoData, demoContext, DEMO_ASOF, demoSimProviders, DEMO_SIM } from './adapters/demo.js';
 import { startLive, inBlackout } from './core/live.js';
 import { runSimulation, runScan } from './core/sim.js';
+import { PARAM_SPEC, diffFromBaseline, dofCount, overBudget, setPath, readParam,
+         makePresetStore, makeLog, promotionInstruction } from './core/presets.js';
+import { runBatch, aggregate, LABELS } from './core/batch.js';
 import { makeQueue } from './core/queue.js';
 import { openStream } from './adapters/alpacaStream.js';
 import { regimeQuotes } from './adapters/fmp.js';
@@ -18,7 +21,8 @@ import { nextEarningsMap, earningsNear } from './adapters/finnhub.js';
 const $ = s => document.querySelector(s);
 const state = { mode: 'DEMO', wl: null, data: null, cfg: BASELINE, liveHandle: null,
   journal: null, muted: false, form: null, medianAtr: 6.9, states: {}, keys: null,
-  sim: { result: null, scan: null, handle: null, running: false } };
+  sim: { result: null, scan: null, handle: null, running: false },
+  wb: { cfg: null, active: null, store: null, log: null, batch: null, handle: null, running: false } };
 const L = () => state.liveHandle?.state;
 const byT = t => state.wl.names.find(n => n.ticker === t);
 // Live mode runs on the wall clock; demo mode runs on the snapshot's as-of moment, so the
@@ -42,6 +46,7 @@ async function boot() {
     $('#mute').textContent = state.muted ? 'alerts muted' : 'alerts on';
     $('#mute').classList.toggle('on', state.muted); };
   bootSim();
+  bootWb();
   renderAll();
   renderForm();
   setInterval(renderHeader, 2000);
@@ -765,6 +770,286 @@ function renderSimCaveats() {
     Provider price adjustments for splits and dividends are provider-dependent.
     Every result is stamped with its preset hash and resolution; results under different hashes are not comparable.
   </div>`;
+}
+
+
+// ---- Module C — configuration & optimization workbench (FR-C1–C9) ----
+// The governance is the feature. state.cfg (what Module A evaluates) is NEVER touched here:
+// FRD 4.7 §1 locks live evaluation to the committed baseline, and experiments live in B and C.
+
+const DOF_BUDGET = 3;
+
+function bootWb() {
+  state.wb.cfg = structuredClone(BASELINE);
+  state.wb.store = makePresetStore(localStorage);
+  state.wb.log = makeLog(localStorage);
+  $('#c_exp').onclick = () => download('presets.json', state.wb.store.exportJSON());
+  $('#c_imp').onclick = () => $('#c_file').click();
+  $('#c_file').onchange = async ev => {
+    const f = ev.target.files?.[0]; if (!f) return;
+    try {
+      const n = state.wb.store.importJSON(await f.text());
+      state.wb.log.append({ action: 'imported', preset: `${n} preset(s)`, hash: '—', detail: f.name });
+      renderPresets(); renderLog(); renderBatchForm();
+    } catch (e) { alertLine(`Import failed: ${e.message}`); }
+    ev.target.value = '';
+  };
+  renderParams(); renderWbSummary(); renderPresets(); renderLog(); renderBatchForm();
+}
+
+// #c_warn is the persistent DoF warning (FR-C9) and is rewritten on every edit; transient
+// messages therefore need their own container or they are wiped the moment they appear.
+const alertLine = msg => { $('#c_msg').innerHTML = `<div class="wbwarn">${msg}</div>`; };
+
+function download(name, text, type = 'application/json') {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+
+// FR-C1/C2: every parameter editable, each showing its baseline value, deviations marked.
+function renderParams() {
+  const groups = [...new Set(PARAM_SPEC.map(s => s.group))];
+  $('#c_params').innerHTML = groups.map(gname => {
+    const rows = PARAM_SPEC.filter(s => s.group === gname).map(spec => {
+      const cur = readParam(state.wb.cfg, spec), base = readParam(BASELINE, spec);
+      return `<div class="prow" data-row="${spec.key}">
+        <div class="plabel">${spec.label}</div>
+        <div>${control(spec, cur)}</div>
+        <div class="base">${fmtVal(base)}</div></div>`;
+    }).join('');
+    return `<div class="pgroup">${gname.toUpperCase()}</div>${rows}`;
+  }).join('');
+  $('#c_params').querySelectorAll('[data-key]').forEach(el => {
+    el.oninput = () => onParamEdit(el);
+    el.onchange = () => onParamEdit(el);
+  });
+  markDeviations();
+}
+
+const fmtVal = v => Array.isArray(v) ? `[${v.join('–')}]` : typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v);
+
+function control(spec, cur) {
+  const a = `data-key="${spec.key}" data-type="${spec.type}"`;
+  const lim = `${spec.min != null ? `min="${spec.min}"` : ''} ${spec.max != null ? `max="${spec.max}"` : ''} ${spec.step != null ? `step="${spec.step}"` : ''}`;
+  if (spec.type === 'range2') return `<div class="r2">
+    <input type="number" ${a} data-idx="0" ${lim} value="${cur[0]}" />
+    <input type="number" ${a} data-idx="1" ${lim} value="${cur[1]}" /></div>`;
+  if (spec.type === 'bool' || spec.type === 'criterion')
+    return `<input type="checkbox" ${a} ${cur ? 'checked' : ''} />`;
+  if (spec.type === 'time') return `<input type="time" ${a} value="${cur}" />`;
+  return `<input type="number" ${a} ${lim} value="${cur}" />`;
+}
+
+function onParamEdit(el) {
+  const key = el.dataset.key, type = el.dataset.type;
+  if (type === 'range2') {
+    const band = [...readParam(state.wb.cfg, { key, type })];
+    band[+el.dataset.idx] = Number(el.value);
+    state.wb.cfg = setPath(state.wb.cfg, key, band);
+  } else if (type === 'bool' || type === 'criterion') {
+    state.wb.cfg = setPath(state.wb.cfg, key, el.checked);
+  } else if (type === 'time') {
+    state.wb.cfg = setPath(state.wb.cfg, key, el.value);
+  } else {
+    state.wb.cfg = setPath(state.wb.cfg, key, Number(el.value));
+  }
+  markDeviations(); renderWbSummary();
+}
+
+function markDeviations() {
+  const dev = new Set(diffFromBaseline(state.wb.cfg).map(d => d.spec.key));
+  $('#c_params').querySelectorAll('[data-row]').forEach(row => {
+    row.classList.toggle('dev', dev.has(row.dataset.row));
+  });
+}
+
+function renderWbSummary() {
+  const cfg = state.wb.cfg, n = dofCount(cfg), diff = diffFromBaseline(cfg);
+  $('#wbmeta').textContent = `${state.wb.active ?? 'unsaved draft'} · ${presetHash(cfg)} · ${n} deviation${n === 1 ? '' : 's'}`;
+  // FR-C9 / FRD 4.7 §4
+  $('#c_warn').innerHTML = overBudget(cfg, DOF_BUDGET)
+    ? `<div class="wbwarn">DEGREES-OF-FREEDOM BUDGET EXCEEDED — ${n} parameters differ from baseline, the protocol allows ${DOF_BUDGET}.
+       Sweeping many parameters at once guarantees a spurious winner somewhere. Batch results for this preset are badged.</div>`
+    : '';
+  $('#c_diff').innerHTML = diff.length
+    ? `<div class="diffgrid">${diff.map(d =>
+        `<div class="dk">${d.spec.key}</div><div>${d.spec.label}</div><div class="num">${fmtVal(d.base)} → <b>${fmtVal(d.current)}</b></div>`).join('')}</div>`
+    : '<div class="dim" style="font-size:11px">Identical to the committed baseline.</div>';
+}
+
+// FR-C3/C4: named presets, hashes, fork-on-edit-when-locked, export/import.
+function renderPresets() {
+  const list = state.wb.store.list();
+  const rows = list.map(p => `<div class="presetrow ${p.name === state.wb.active ? 'on' : ''}">
+      <div>${p.name}${p.locked ? '<span class="lockbadge">LOCKED</span>' : ''}
+        ${overBudget(p.cfg, DOF_BUDGET) ? '<span class="lockbadge">&gt;DoF</span>' : ''}</div>
+      <div>
+        <button class="mini" data-load="${p.name}">load</button>
+        ${p.locked ? '' : `<button class="mini" data-lock="${p.name}">lock</button>`}
+        <button class="mini" data-promote="${p.name}">promote…</button>
+        <button class="mini" data-del="${p.name}">×</button>
+      </div>
+      <div class="pmeta">${p.hash} · ${dofCount(p.cfg)} deviation(s)${p.parent ? ` · forked from ${p.parent}` : ''}</div>
+    </div>`).join('');
+  $('#c_presets').innerHTML = (rows || '<div class="dim" style="font-size:11px">No presets saved yet.</div>') +
+    `<div class="fillactions">
+      <input id="c_name" placeholder="preset name" style="flex:1;background:var(--bg);border:1px solid var(--edge);
+        color:var(--ink);padding:5px 8px;border-radius:3px;font:11px var(--mono)" />
+      <button class="mini" id="c_save">Save current</button></div>`;
+
+  $('#c_save').onclick = () => {
+    const name = $('#c_name').value.trim();
+    if (!name) return;
+    const existing = state.wb.store.get(name);
+    try {
+      if (!existing) {
+        const p = state.wb.store.create(name, structuredClone(state.wb.cfg));
+        state.wb.log.append({ action: 'created', preset: p.name, hash: p.hash,
+          detail: `${dofCount(p.cfg)} deviation(s) from baseline` });
+        state.wb.active = p.name;
+      } else {
+        const r = state.wb.store.update(name, structuredClone(state.wb.cfg));
+        state.wb.active = r.preset.name;
+        state.wb.log.append({ action: r.forked ? 'forked (parent was locked)' : 'updated',
+          preset: r.preset.name, hash: r.preset.hash, detail: r.forked ? `from ${r.from}` : '' });
+        if (r.forked) alertLine(`"${name}" is locked, so the edit became a new preset "${r.preset.name}" —
+          results stay attached to the hash that produced them (FR-C4).`);
+      }
+      $('#c_name').value = '';
+      renderPresets(); renderLog(); renderWbSummary(); renderBatchForm();
+    } catch (e) { alertLine(e.message); }
+  };
+  $('#c_presets').querySelectorAll('[data-load]').forEach(el => el.onclick = () => {
+    const p = state.wb.store.get(el.dataset.load);
+    state.wb.cfg = structuredClone(p.cfg); state.wb.active = p.name;
+    renderParams(); renderWbSummary(); renderPresets();
+  });
+  $('#c_presets').querySelectorAll('[data-lock]').forEach(el => el.onclick = () => {
+    const r = state.wb.store.lock(el.dataset.lock);
+    if (r.changed) state.wb.log.append({ action: 'locked', preset: r.preset.name, hash: r.preset.hash,
+      detail: 'no further edits without becoming a new preset' });
+    renderPresets(); renderLog();
+  });
+  $('#c_presets').querySelectorAll('[data-del]').forEach(el => el.onclick = () => {
+    state.wb.store.remove(el.dataset.del);
+    if (state.wb.active === el.dataset.del) state.wb.active = null;
+    renderPresets(); renderWbSummary(); renderBatchForm();
+  });
+  // FR-C8: promotion is a repository commit. The UI prints the edit and stops.
+  $('#c_presets').querySelectorAll('[data-promote]').forEach(el => el.onclick = () => {
+    const p = state.wb.store.get(el.dataset.promote);
+    $('#c_msg').innerHTML = `<div class="wbwarn" style="border-color:var(--armed);color:var(--armed);
+      background:color-mix(in srgb,var(--armed) 10%,transparent)"><pre style="margin:0;white-space:pre-wrap;font:11px var(--mono)">${promotionInstruction(p)}</pre></div>`;
+    state.wb.log.append({ action: 'promotion instruction shown', preset: p.name, hash: p.hash });
+    renderLog();
+  });
+}
+
+function renderLog() {
+  const entries = state.wb.log.list();
+  $('#c_log').innerHTML =
+    (entries.length ? entries.slice().reverse().map(e =>
+      `<div class="logentry"><b>${e.action}</b> — ${e.preset} <span class="dim">${e.hash}</span><br>
+        <span class="dim">${e.ts.replace('T', ' ').slice(0, 16)}</span>${e.detail ? ` · ${e.detail}` : ''}
+        ${e.rationale ? `<br>“${e.rationale}”` : ''}</div>`).join('')
+      : '<div class="dim" style="font-size:11px">Empty. Every preset created, locked or promoted lands here.</div>') +
+    `<div class="fillactions" style="flex-wrap:wrap">
+      <input id="c_rationale" placeholder="rationale — the mechanism, not the metric"
+        style="flex:1;min-width:180px;background:var(--bg);border:1px solid var(--edge);color:var(--ink);
+        padding:5px 8px;border-radius:3px;font:11px var(--mono)" />
+      <button class="mini" id="c_addlog">Record</button>
+      <button class="mini" id="c_logjson">JSON</button>
+      <button class="mini" id="c_logmd">Markdown</button></div>
+    <div class="wbnote">Append-only (FR-C8). The Markdown export is the IC appendix artefact.</div>`;
+  $('#c_addlog').onclick = () => {
+    const r = $('#c_rationale').value.trim(); if (!r) return;
+    const p = state.wb.active ? state.wb.store.get(state.wb.active) : null;
+    state.wb.log.append({ action: 'rationale', preset: p?.name ?? 'unsaved draft',
+      hash: p?.hash ?? presetHash(state.wb.cfg), rationale: r });
+    renderLog();
+  };
+  $('#c_logjson').onclick = () => download('optimization_log.json', state.wb.log.exportJSON());
+  $('#c_logmd').onclick = () => download('optimization_log.md', state.wb.log.exportMarkdown(), 'text/markdown');
+}
+
+// FR-C5/C7: the batch runner, and the tuning/validation split it enforces.
+function renderBatchForm() {
+  const presets = state.wb.store.list();
+  $('#c_batch').innerHTML = `
+    <div class="fillgrid">
+      <div class="wide"><label>dates (one per line or comma-separated)</label>
+        <textarea id="c_dates">${defaultDates().join('\n')}</textarea></div>
+      <div><label>entry time (CET)</label><input id="c_time" type="time" value="16:00" /></div>
+      <div><label>date set</label><select id="c_label">${LABELS.map(l => `<option>${l}</option>`).join('')}</select></div>
+    </div>
+    <div class="plist">${presets.length
+      ? presets.map(p => `<label><input type="checkbox" data-preset="${p.name}" ${p.name === state.wb.active ? 'checked' : ''} /> ${p.name} <span class="dim">${p.hash}</span></label>`).join('')
+      : '<span class="dim">Save a preset to run a batch — the runner compares named configurations, it does not search.</span>'}</div>
+    <div class="fillactions"><button id="c_run">Run batch</button>
+      <button class="mini" id="c_cancel">Cancel</button>
+      <span class="dim" id="c_progress"></span></div>
+    <div class="wbnote">A <b>validation</b> run locks every selected preset before its first date (FRD 4.7 §3):
+      results can never be attributed to a configuration that changed afterwards. Tuning and validation
+      outcomes are reported separately and never pooled.</div>`;
+  $('#c_run').onclick = runBatchUI;
+  $('#c_cancel').onclick = () => { state.wb.handle?.cancel(); $('#c_progress').textContent = 'cancelling…'; };
+}
+
+const defaultDates = () => ['2026-07-27', '2026-07-28', '2026-07-29', '2026-07-30', '2026-07-31'];
+
+async function runBatchUI() {
+  if (state.wb.running) return;
+  const chosen = [...$('#c_batch').querySelectorAll('[data-preset]')].filter(el => el.checked)
+    .map(el => state.wb.store.get(el.dataset.preset));
+  if (!chosen.length) { alertLine('Select at least one preset. The runner compares operator-defined presets — it never searches.'); return; }
+  const dates = $('#c_dates').value.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+  if (!dates.length) return;
+  const label = $('#c_label').value;
+
+  state.wb.running = true;
+  $('#c_results').innerHTML = '';
+  const deps = { ...simDeps(), presetStore: state.wb.store };
+  const handle = runBatch({ dates, presets: chosen, label, timeCET: $('#c_time').value, watchlist: state.wl },
+    deps, p => { $('#c_progress').textContent = `${p.done}/${p.total} — ${p.preset} @ ${p.date}`; });
+  state.wb.handle = handle;
+  const out = await handle.promise;
+  state.wb.running = false;
+  $('#c_progress').textContent = out.cancelled ? `cancelled at ${out.done}/${out.total}` : '';
+  if (out.locked.length) {
+    state.wb.log.append({ action: 'locked for validation', preset: out.locked.join(', '), hash: '—',
+      detail: `before running ${dates.length} validation date(s)` });
+    alertLine(`Validation run — locked before the first date: ${out.locked.join(', ')}. Editing any of them now creates a new preset (FR-C4).`);
+    renderPresets(); renderLog();
+  }
+  state.wb.batch = [...(state.wb.batch ?? []), ...out.runs];
+  renderBatchResults();
+}
+
+function renderBatchResults() {
+  const rows = aggregate(state.wb.batch ?? [], state.wl);
+  if (!rows.length) { $('#c_results').innerHTML = ''; return; }
+  const pct = v => v == null ? '—' : (v * 100).toFixed(0) + '%';
+  const num = (v, d = 2) => v == null ? '—' : v.toFixed(d);
+  const table = label => {
+    const rs = rows.filter(r => r.label === label);
+    if (!rs.length) return '';
+    return `<div class="lbl">${label.toUpperCase()} DATES</div>
+      <table><thead><tr><th>Preset</th><th>Hash</th><th class="num">Dates</th><th class="num">Signals</th>
+      <th class="num">Hit</th><th class="num">Expectancy</th><th class="num">Avg MAE</th><th class="num">Avg MFE</th>
+      <th class="num">Time-out</th><th>Res.</th></tr></thead><tbody>
+      ${rs.map(r => `<tr>
+        <td>${r.preset}${r.dofOverBudget ? '<span class="lockbadge">&gt;DoF</span>' : ''}</td>
+        <td class="dim">${r.hash}</td><td class="num">${r.dates}</td><td class="num">${r.signals}</td>
+        <td class="num">${pct(r.hitRate)}</td><td class="num">${r.expectancy == null ? '—' : num(r.expectancy) + '%'}</td>
+        <td class="num">${num(r.avgMae)}</td><td class="num">${num(r.avgMfe)}</td>
+        <td class="num">${pct(r.timeoutShare)}</td><td class="dim">${r.resolutions.join(', ') || '—'}</td></tr>`).join('')}
+      </tbody></table>`;
+  };
+  $('#c_results').innerHTML = table('tuning') + table('validation') +
+    `<div class="wbnote">Expectancy is per trade at Module D sizing, in % of equity, measured by the same
+      <code>computeKpis()</code> the live journal uses. Rows under different hashes are different strategies,
+      not different runs of one. Tuning and validation are never pooled (FR-C7).</div>`;
 }
 
 function exportJournal() {

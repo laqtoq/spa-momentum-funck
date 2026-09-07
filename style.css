@@ -141,3 +141,44 @@ tr.al-time{box-shadow:inset 3px 0 0 var(--armed)}
 .caveats{font-size:10px;line-height:1.6;color:var(--muted);font-family:var(--mono);margin-top:10px;
   border-top:1px solid var(--edge);padding-top:8px}
 .caveats b{color:var(--armed);font-weight:600}
+
+
+/* Module C — workbench (FR-C1/C2/C9) */
+#wb h3{font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  margin:14px 0 6px;border-top:1px solid var(--edge);padding-top:10px}
+#wb h3 small{text-transform:none;letter-spacing:0;font-size:10px}
+#wb h3:first-child{border-top:none;margin-top:0}
+.wbcols{display:grid;grid-template-columns:1.15fr 1fr;gap:18px}
+@media(max-width:980px){.wbcols{grid-template-columns:1fr}}
+.pgroup{font:10px var(--mono);color:var(--muted);letter-spacing:.08em;margin:8px 0 3px}
+.prow{display:grid;grid-template-columns:1fr 128px 74px;gap:4px 8px;align-items:center;
+  font:11px var(--mono);padding:3px 0;border-bottom:1px solid var(--edge)}
+.prow:last-child{border-bottom:none}
+.prow input[type=number],.prow input[type=time]{width:100%;background:var(--bg);border:1px solid var(--edge);
+  color:var(--ink);padding:3px 6px;border-radius:3px;font:11px var(--mono)}
+.prow .base{color:var(--idle);font-size:10px;text-align:right}
+.prow.dev{background:color-mix(in srgb,var(--armed) 9%,transparent)}
+.prow.dev .plabel{color:var(--armed)}
+.prow.dev .base::before{content:'was ';}
+.r2{display:flex;gap:4px}
+.presetrow{display:grid;grid-template-columns:1fr auto;gap:3px 8px;font:11px var(--mono);
+  padding:5px 0;border-bottom:1px solid var(--edge);align-items:center}
+.presetrow:last-child{border-bottom:none}
+.presetrow.on{background:color-mix(in srgb,var(--long) 10%,transparent)}
+.presetrow .pmeta{grid-column:1/3;font-size:10px;color:var(--muted)}
+.lockbadge{font-size:9px;border:1px solid var(--armed);color:var(--armed);border-radius:3px;padding:0 4px;margin-left:5px}
+.wbwarn{border:1px solid var(--short);background:color-mix(in srgb,var(--short) 12%,transparent);
+  color:var(--short);font:11px var(--mono);padding:7px 10px;border-radius:4px;margin:8px 0;line-height:1.5}
+.wbnote{font:10px var(--mono);color:var(--muted);line-height:1.5;margin-top:6px}
+#c_log .logentry{font:10px var(--mono);border-bottom:1px solid var(--edge);padding:5px 0;line-height:1.5}
+#c_log .logentry b{color:var(--ink)}
+#c_batch .fillgrid{margin-bottom:8px}
+#c_batch textarea{width:100%;background:var(--bg);border:1px solid var(--edge);color:var(--ink);
+  padding:6px 8px;border-radius:3px;font:11px var(--mono);min-height:56px;resize:vertical}
+.plist{display:flex;flex-wrap:wrap;gap:4px 12px;font:11px var(--mono)}
+.plist label{display:flex;gap:5px;align-items:center;color:var(--muted)}
+#c_results table{margin-top:8px}
+#c_results .lbl{font:10px var(--mono);letter-spacing:.08em;color:var(--muted);margin-top:12px}
+.diffgrid{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;font:11px var(--mono);align-items:baseline}
+.diffgrid .dk{color:var(--armed)}
+.diffgrid .num{text-align:right;font-variant-numeric:tabular-nums}
