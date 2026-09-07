@@ -1,7 +1,7 @@
 # HANDOVER — Momentum with Runway
 ### Context document for Claude Code sessions. Read this first, fully, before touching code.
 
-Last updated: 2026-08-04 · Prepared in the claude.ai project where all design work happened (conversation exports must accompany final submission — see §11).
+Last updated: 2026-09-07 · Prepared in the claude.ai project where all design work happened (conversation exports must accompany final submission — see §11).
 
 ---
 
@@ -9,10 +9,10 @@ Last updated: 2026-08-04 · Prepared in the claude.ai project where all design w
 
 **Post-module assignment** for the Executive MBA module *"Generative AI in Finance"* (WU Executive Academy Vienna, instructor Ted Kwartler, module held Aug 3–4, 2026). The student is on the **Finance track** (portfolio optimization optional; a non-optimized stock group is permitted).
 
-**Deadline: Monday, August 31, 2026, 09:00 CEST** — submitted as `SURNAME_POST.pdf` on Moodle. A one-time extension costs 25% of points, so **the week of Aug 25 is a protected buffer: plan to be done by Aug 24.** GitHub repository links must be live and **public** at submission. All work is checked for plagiarism and AI fingerprints; AI-drafted written work must be human-edited and accompanied by full AI conversation exports.
+**Deadline: not yet fixed — VERIFY WITH THE INSTRUCTOR.** The course syllabus (`EA_Syllabus_genAI_finance_2026_UPDATED.docx`, Post-Module section, re-read 2026-09-07) states verbatim: *"Deadline: TBD. Submit as SURNAME_POST.pdf. Include your names in the document. GitHub repository links must be live and public at time of submission."* Earlier versions of this document asserted "Monday, August 31, 2026, 09:00 CEST" with a protected buffer week from Aug 25 — **that date appears nowhere in the syllabus and was an assumption that hardened into a documented fact.** It is corrected here rather than carried forward. Confirm the real date on Moodle before planning the remaining phases. All work is checked for plagiarism and AI fingerprints; AI-drafted written work must be human-edited and accompanied by full AI conversation exports.
 
 **Graded deliverables (40% of course grade):**
-1. Functional Requirements Document — exists as `docs/FRD.md` (v1.5), needs human editing pass
+1. Functional Requirements Document — exists as `docs/FRD.md` (v1.7), needs human editing pass
 2. Portfolio Construction — done: 20-name screened watchlist (`public/watchlist.json`)
 3. Portfolio Dashboard — this repo; vibe-coded SPA, published via GitHub Pages
 4. Executive Summary (1 page) — not started
@@ -39,7 +39,7 @@ Original design covered **DAX 40 + S&P 500**; the DAX leg is **deferred (not aba
 
 | File | Role |
 |---|---|
-| `docs/FRD.md` | **The spec. v1.5.** Every FR/NFR ID referenced in code and commits comes from here. It has a change log (§11) — every design change goes through it. |
+| `docs/FRD.md` | **The spec. v1.7.** Every FR/NFR ID referenced in code and commits comes from here. It has a change log (§11) — every design change goes through it. |
 | `docs/screen_report.md` | First screening run (2026-08-04): filter distributions, the three findings that produced FRD v1.5 |
 | `public/watchlist.json` | The screened 20 names + bias tags + correlation clusters + 60d betas + thresholds used. Versioned config per FR-A14. Refresh monthly. |
 | `public/key_dates.json` | FOMC dates (Sep 16, Oct 28, Dec 9 2026 confirmed); CPI dates still TO VERIFY; earnings come live from FMP |
@@ -57,11 +57,19 @@ If `docs/FRD.md` is missing, it was delivered as `FRD_momentum_runway.md` alongs
   - `lessons/day2-finance/scripts/FIN_A..G` — the taught LLM-context pipeline; `FIN_C` proves **newsdata.io is course-sanctioned** (env var name used in class: `NEWS_DATA_IO_API_KEY`)
   - `lessons/day1/day1_scripts/H_costar_prompt_finance.txt` — CO-STAR prompt template, already embedded in our desk-note adapter and the right skeleton for the IC deck
 
-## 5. Current build state (verified 2026-08-04)
+## 5. Current build state (verified 2026-09-07)
 
-**Tests: 34/34 green.** Run: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/adapters.test.js` (do NOT pass a bare directory to `node --test` — it miscounts, see §10). `npm run build` green (~10.4 kB JS).
+**Tests: 61/61 green.** Run: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/engine/monitor.test.js test/adapters.test.js test/live.test.js test/demo.test.js` (do NOT pass a bare directory to `node --test` — it miscounts, see §10). `npm run build` green (~37.5 kB JS / 14.6 kB gzip).
 
-Done: signal engine (indicators cross-verified vs Python fixtures; levels/runway; evaluate() with per-criterion toggles; walker w/ conservative same-bar rule + MAE/MFE; full sizing/bucket logic) · core (config+FNV-1a preset hash, CET session clock, throttle queue w/ budget meter, deterministic tick aggregator, localStorage trade journal w/ KPIs & CSV/JSON round-trip) · adapters (Alpaca IEX WS, Twelve Data bars+quotes, FMP regime, Finnhub REST earnings, news env-switch, Riskline, OpenRouter CO-STAR, demo) · **demo mode**: app boots keyless on canned data with the real engine · **live wiring (FR-A15/A17/A1/A2/A5/A7/A8/A9/A18)**: `src/core/live.js` orchestrator (all I/O behind injected deps, 9 tests) — stream→per-symbol aggregators→engine, chunked TD quotes, SPY 20-DMA, per-symbol earnings + blackout pause defaults w/ explicit override confirm, reconnect backfill + VWAP reseed, provenance labels, budget meter · UI: mode-aware overview/drill-down/header · `public/spike.html` v2 verification page. **Live mode verified headless (tests) + keyless guard in browser; full click-through with real keys during market hours still pending (next session 15:30–22:00 CET) — expect states to fill over ~8 min (3 TD calls/name through the 8/min queue).
+Done: signal engine (indicators cross-verified vs Python fixtures; levels/runway; evaluate() with per-criterion toggles; walker w/ conservative same-bar rule + MAE/MFE; full sizing/bucket logic) · core (config+FNV-1a preset hash, CET session clock, throttle queue w/ budget meter, deterministic tick aggregator, localStorage trade journal w/ KPIs & CSV/JSON round-trip) · adapters (Alpaca IEX WS, Twelve Data bars+quotes, FMP regime, Finnhub REST earnings, news env-switch, Riskline, OpenRouter CO-STAR, demo) · **demo mode**: app boots keyless on a staged snapshot and demonstrates LONG/ARMED/IDLE through the real engine (see D9 below) · **live wiring (FR-A15/A17/A1/A2/A5/A7/A8/A9/A18)**: `src/core/live.js` orchestrator (all I/O behind injected deps, 9 tests) — stream→per-symbol aggregators→engine, chunked TD quotes, SPY 20-DMA, per-symbol earnings + blackout pause defaults w/ explicit override confirm, reconnect backfill + VWAP reseed, provenance labels, budget meter · UI: mode-aware overview/drill-down/header · `public/spike.html` v2 verification page. **Live mode verified headless (tests) + keyless guard in browser; full click-through with real keys during market hours still pending (next session 15:30–22:00 CET) — expect states to fill over ~8 min (3 TD calls/name through the 8/min queue).
+
+**Position monitor (FR-A16) landed 2026-09-07** — `plans/2026-09-07-position-monitor.md`. Pure `src/engine/monitor.js` (distances to stop/target in underlying pp and levered %, open P&L, elapsed vs 5h time stop and 21:45 CET hard close with the binding limit named, latched proximity/time alerts, excursion math; 9 tests) · `live.js` tracks MAE/MFE off the tape, flags trades as approximate across a stream gap, and exposes `book()/openPosition()/closePosition()` (3 new tests) · UI: monitor panel with a direction-agnostic stop◄►target strip, entry-fill form with clock/price/`allocate()` prefills + signal snapshot + preset hash (FR-D7/D8), exit-fill form with reason and realized P&L, export prompt on close (FR-D10), WebAudio alert with mute. Click-through verified in demo mode 2026-09-07 (entry → monitor → alerts → exit → journal → equity). Two bugs found and fixed in that pass: a `2h60` duration format, and every fill recording as `edited` because the rounded prefill never matched the raw tape price.
+
+**Demo mode rebuilt as a staged snapshot 2026-09-07 (decision D9).** The old generator was seeded noise and could not display a single signal — every name evaluated IDLE (E1 RSI ~10, E2 0.85, E3 wrong VWAP side, E8 no break), and E6 gated on the wall clock besides, so the app was IDLE 21+ hours a day and every weekend. `src/adapters/demo.js` now ships a deterministic scripted dataset anchored to **`DEMO_ASOF` = Tue 4 Aug 2026, 16:30 CET** — inside the entry window, US session open, matching the watchlist's screening date. In demo mode that as-of moment *is* the clock: the session pill, engine context, position clocks and fill prefills all resolve to it, so everything on screen describes one instant. Live mode is untouched and runs on the wall clock.
+
+Staged states (produced by the real `evaluate()`, not hardcoded): **DELL LONG** (every criterion passes) · **LITE and PWR ARMED** (structure without a trigger — LITE lacks volume and the break, PWR has the volume but not the break) · **CVNA IDLE on E1** (extended, RSI out of band) · **VLO IDLE on E4** (priced into resistance) · **BSX IDLE on E5** (too quiet to reach +3% inside the time budget) · **ETN IDLE** · all 13 short-bias names IDLE on **G1**, because SPY is above its 20-DMA — the regime gate visibly doing its job. `test/demo.test.js` asserts that whole map through the engine, so a drift in thresholds or indicators fails the build rather than quietly emptying the demo. `demoContext()` moved into the adapter so the test and the app share one context shape.
+
+Recorded in the FRD as **v1.7** (change log §11) per the handoff note in `docs/ic_deck_plan.md` §6, and as decision D9 below. Not added to the compromise register: that register is for free-tier data trade-offs, and this affects no live signal.
 
 **Spike v1 ran 2026-08-04 (live market) and FAILED as designed — fallbacks activated, FRD amended to v1.6 (see C9):** Finnhub free WS streams only a popular-symbol subset (AAPL/TSLA yes, SPY/MU/DELL silent, no error frames); FMP free tier for post-Aug-2025 keys is symbol-restricted (SPY/^VIX OK, watchlist names 402) with batch + legacy `v3` endpoints dead. Verified working: Twelve Data fully serves watchlist names (1h/5m/60d/`/quote` batch); Finnhub REST `/calendar/earnings` works from the browser (CORS fine — v1.5's contrary assumption was wrong); FMP `stable/quote` for SPY + ^VIX. Pivot implemented and **spike v2 PASSED with the user's keys 2026-08-04 (live market)**: Alpaca IEX WS authenticated and streamed SPY/MU/DELL/AAPL (Layer 1 confirmed); Twelve Data overview quotes + 60d 5m depth on watchlist names confirmed; FMP SPY/^VIX regime pair confirmed (DELL 402 = expected C9 evidence); Finnhub earnings resolved **20/20 watchlist names** — but only via per-symbol calendar calls: the bulk calendar caps at 1500 rows keeping rows nearest `to`, silently dropping near-term dates (adapter + FR-A7 written per-symbol accordingly). **Live wiring (FR-A15–A18) is unblocked.**
 
@@ -82,7 +90,7 @@ Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost
 1. **Superpowers discipline**: every phase gets a plan file in `plans/` (bite-sized tasks, each with a VERIFY step); execute task-by-task; a failing check stops the phase until understood. Three real bugs were caught this way already — keep it.
 2. **Spec-code truth**: if tests force a design change (see §9 D4), the FRD is edited in the same phase, with a change-log entry. Commits reference FR IDs ("implement FR-A16 position monitor").
 3. **Scope is frozen at FRD v1.5.** The build is at the ambitious edge of the timeline. Cuttable-if-needed, in order: Module C batch runner → Module C beyond preset editing → Module B scan mode. Never cut: journal, position monitor, demo mode, provenance labels.
-4. Build order remaining: position monitor UI (FR-A16; journal exists in `store.js`, live inputs ready on `live.js` state: `bars5m()/vwap()/live`) → Module B → Module D bucket board UI → Module C → R port of the screening pipeline (course-facing; Python original in project history) → docs/deck. Live wiring done 2026-08-04 (needs one market-hours click-through).
+4. Build order remaining: ~~position monitor UI (FR-A16)~~ done 2026-09-07 → Module B → Module D bucket board UI (FR-D3/D4) + KPI & kill-criteria panel (FR-D11) → Module C → R port of the screening pipeline (course-facing; Python original in project history) → docs/deck. Live wiring done 2026-08-04 (needs one market-hours click-through).
 5. Session times are **CET-anchored** (user is Europe-based; syllabus uses CEST). US cash session 15:30–22:00 CET; entry window 15:45–18:00.
 
 ## 9. Decision log (the "why" — do not silently reverse)
@@ -94,6 +102,7 @@ Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost
 - **D5** Screen findings → FRD v1.5: **S3 adaptive** ATR floor = max(2.0%, liquid-universe median) [2.0% passed 96% of liquid names — useless]; **S7 sector cap** max 6/GICS sector [unconstrained top-20 was one 17-name AI-hardware cluster]; 450% beta cap confirmed, Module C-configurable.
 - **D6** LLM sentiment is **never** in the signal path (course theme: AI as drafting assistant vs authoritative source); commentary layer only, with prompt-injection hygiene (FR-A11).
 - **D7** Social funnel (ApeWisdom primary, Tradestie backup, StockTwits/Motley Fool excluded — no viable API) proposes candidates at screening time in R only; filters dispose.
+- **D9** Demo mode is a **staged snapshot on a frozen clock**, not a live-clock sandbox (2026-09-07, user decision). The alternative was to record the narrated demo inside the real 15:45–18:00 CET window and depend on a name actually firing — rejected as unreproducible. Two honesty constraints hold the decision in place: the states are computed by the real engine from the canned bars (nothing is hardcoded to LONG), and every panel labels the snapshot and its as-of moment. If a grader asks "is this faked?", the answer is `test/demo.test.js` — the same `evaluate()` that runs live produces the map. Do not let demo data drift into the live path, and do not hardcode a state to fix a failing demo test; fix the bars.
 - **D8** Compromises to stay free-tier are *first-class*: FRD §6.3 register C1–C8; surfaced in-UI via provenance labels. Extend the register rather than absorbing new compromises silently.
 
 ## 10. Environment gotchas (learned the hard way)
@@ -110,7 +119,8 @@ Free-tier keys the user holds: FMP, Twelve Data, newsdata.io, NewsAPI (localhost
 ## 11. Submission checklist (keep current as phases complete)
 
 - [x] Spike v1 run 2026-08-04 → fallbacks activated + FRD amended to v1.6 (C9) · [x] Spike v2 passed with user keys 2026-08-04 (screenshot taken; keep for appendix) · [ ] Spike v2 re-run at deployed URL once Pages exists
-- [x] Live wiring FR-A15–A18 (2026-08-04; market-hours click-through pending) · [ ] Position monitor UI · [ ] Module B · [ ] Module D UI · [ ] Module C (minimum: preset editing)
+- [x] Live wiring FR-A15–A18 (2026-08-04; market-hours click-through pending) · [x] Position monitor UI (FR-A16, 2026-09-07) · [ ] Module B · [ ] Module D UI · [ ] Module C (minimum: preset editing)
+- [x] Demo-signal question resolved 2026-09-07 → staged snapshot on a frozen clock (D9); the narrated demo can now be recorded at any hour · [ ] Confirm the real submission deadline on Moodle (§1)
 - [ ] R port of screening pipeline committed (`screen/` folder) + rerun close to submission for a fresh watchlist
 - [ ] FRD human-edited (name, voice pass, thresholds sanity: VIX 30, 18:00 cutoff, 450% β-cap)
 - [ ] Executive summary (1 p.) · [ ] IC deck (CO-STAR skeleton; slides: thesis → risk math → Knight safeguards → live demo → optimization-governance → challenge Q&A incl. "what if hit rate is 15%?" and "why not unlevered momentum basket?") · [ ] Narrated demo recording (record on localhost for fresh NewsAPI headlines)

@@ -45,3 +45,33 @@ button{background:var(--long);border:none;color:#0c211a;font-weight:600;border-r
 .state.PAUSED{color:var(--armed);border:1px dashed var(--armed);border-radius:3px;padding:0 4px}
 .badge.paused{background:color-mix(in srgb,var(--armed) 25%,transparent);cursor:pointer}
 .badge[data-pause]{cursor:pointer}
+
+/* Position monitor (FR-A16) — the book's live face */
+button.ghost{background:none;border:1px solid var(--edge);color:var(--muted);font:11px var(--mono);
+  padding:2px 8px;border-radius:3px;font-weight:400;float:right;margin-left:6px}
+button.ghost:hover{color:var(--ink);border-color:var(--muted)}
+button.ghost.on{color:var(--armed);border-color:var(--armed)}
+button.mini{background:none;border:1px solid var(--edge);color:var(--muted);font:11px var(--mono);padding:1px 7px;border-radius:3px;font-weight:400}
+button.mini:hover{color:var(--ink);border-color:var(--muted)}
+#monitor tbody tr{cursor:default}
+#monitor tbody tr:hover{background:none}
+/* Stop ◄──── price ────► target, direction-agnostic: 0% is always the stop, 100% always the target */
+.ps{position:relative;width:150px;height:12px;background:var(--edge);border-radius:2px;overflow:hidden}
+.ps .stopz{position:absolute;left:0;top:0;bottom:0;width:14%;background:color-mix(in srgb,var(--short) 32%,transparent)}
+.ps .tgtz{position:absolute;right:0;top:0;bottom:0;width:14%;background:color-mix(in srgb,var(--long) 32%,transparent)}
+.ps .entry{position:absolute;top:0;bottom:0;width:1px;background:var(--muted)}
+.ps .px{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--ink)}
+tr.al-stop{background:color-mix(in srgb,var(--short) 16%,transparent)!important}
+tr.al-target{background:color-mix(in srgb,var(--long) 16%,transparent)!important}
+tr.al-time{box-shadow:inset 3px 0 0 var(--armed)}
+.approx{color:var(--armed)}
+.fillform{margin-top:10px;padding:10px 12px;border:1px solid var(--edge);border-radius:4px;background:var(--bg)}
+.fillform h3{margin:0 0 8px;font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fillgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;align-items:end}
+.fillgrid label{display:block;font:10px var(--mono);color:var(--muted);margin-bottom:3px}
+.fillgrid input,.fillgrid select{width:100%;background:var(--panel);border:1px solid var(--edge);color:var(--ink);
+  padding:6px 8px;border-radius:3px;font:12px var(--mono)}
+.fillgrid .wide{grid-column:1/-1}
+.fillactions{display:flex;gap:8px;margin-top:10px;align-items:center}
+.fillactions button{padding:6px 14px;font:12px var(--mono)}
+.fillnote{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:8px;line-height:1.5}

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { inBlackout, slotIndexNY, slotBaselineFrom, startLive } from '../src/core/live.js';
 import { BASELINE } from '../src/core/config.js';
 import { makeQueue } from '../src/core/queue.js';
+import { makeJournal } from '../src/core/store.js';
 
 test('blackout: T-1 through T+1 inclusive, unknown fails safe', () => {
   const cfg = BASELINE;
@@ -59,9 +60,13 @@ function fakeDeps(over = {}) {
       return Array.from({ length: 156 }, (_, i) => ({ t: Date.parse('2026-08-03T13:30:00Z') + i * 300000, o: 9, h: 11, l: 9, c: 10, v: 100 }));
     },
     earningsMap: async () => { calls.earnings += 1; return { AA: '2026-09-01', BB: null }; },
-    queue: instantQueue(), ...over,
+    queue: instantQueue(), journal: memJournal(), ...over,
   };
   return { deps, calls };
+}
+function memJournal() {
+  const mem = new Map();
+  return makeJournal({ getItem: k => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) });
 }
 const settle = () => new Promise(r => setTimeout(r, 60));
 
@@ -135,3 +140,52 @@ test('startLive: pause forces PAUSED state and blackout defaults to paused', asy
   assert.equal(state.overrides.BB, true);
 });
 const nextDayISO = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+// ---- Module D book on the live handle (FR-A16 / FR-D7–D9) ----
+
+const FILL = { ticker: 'AA', dir: 'long', entryTs: '2026-08-04T15:50:00+02:00',
+               entryPrice: 100, sizeFrac: 0.1875, leverage: 10 };
+
+test('startLive: tape ticks accumulate MAE/MFE and never shrink them (FR-D8)', async () => {
+  const { deps, calls } = fakeDeps();
+  const { state } = startLive({ keys: KEYS, watchlist: WL, cfg: BASELINE }, deps);
+  state.openPosition(FILL);
+  const tick = p => calls.stream.onTrade({ sym: 'AA', p, v: 10, t: Date.parse('2026-08-04T14:00:01Z') });
+  tick(98.5);
+  tick(102);
+  tick(100);                                             // back to entry — extremes must hold
+  const p = deps.journal.state().open[0];
+  assert.ok(Math.abs(p.mae - 1.5) < 1e-9, `mae ${p.mae}`);
+  assert.ok(Math.abs(p.mfe - 2) < 1e-9, `mfe ${p.mfe}`);
+  await settle();
+});
+
+test('startLive: book() prices open positions against stop, target and time limits', async () => {
+  const { deps, calls } = fakeDeps();
+  const { state } = startLive({ keys: KEYS, watchlist: WL, cfg: BASELINE }, deps);
+  assert.deepEqual(state.book(), []);
+  state.openPosition(FILL);
+  calls.stream.onTrade({ sym: 'AA', p: 100, v: 10, t: Date.parse('2026-08-04T14:00:01Z') });
+  const [row] = state.book();
+  assert.equal(row.ticker, 'AA');
+  assert.equal(row.livePrice, 100);
+  assert.ok(Math.abs(row.mon.toStopPct - 0.8) < 1e-9);
+  assert.ok(Math.abs(row.mon.toTargetLevered - 30) < 1e-9);
+  assert.ok(['TIME_STOP', 'HARD_CLOSE'].includes(row.mon.binding));
+  const closed = state.closePosition(row.id, { exitTs: '2026-08-04T18:20:00+02:00', exitPrice: 103, exitReason: 'TARGET' });
+  assert.ok(Math.abs(closed.leveredPct - 30) < 1e-6);
+  assert.deepEqual(state.book(), []);
+  await settle();
+});
+
+test('startLive: a stream gap marks open trades approximate (FR-D8)', async () => {
+  const { deps, calls } = fakeDeps();
+  const { state } = startLive({ keys: KEYS, watchlist: WL, cfg: BASELINE }, deps);
+  state.openPosition(FILL);
+  assert.equal(deps.journal.state().open[0].approx, undefined);
+  calls.stream.onStatus('DEGRADED');
+  assert.equal(deps.journal.state().open[0].approx, true);
+  calls.stream.onStatus('CONNECTED');
+  await settle();
+  assert.equal(state.reseeded, true);                    // gap still triggers the FR-A17 backfill
+});
