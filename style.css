@@ -75,3 +75,49 @@ tr.al-time{box-shadow:inset 3px 0 0 var(--armed)}
 .fillactions{display:flex;gap:8px;margin-top:10px;align-items:center}
 .fillactions button{padding:6px 14px;font:12px var(--mono)}
 .fillnote{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:8px;line-height:1.5}
+
+/* Bucket board (FR-D3) — consumed vs available, the daily budget as the loud one */
+.bkt{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:baseline;
+  font:12px var(--mono);padding:6px 0;border-bottom:1px solid var(--edge)}
+.bkt:last-child{border-bottom:none}
+.bkt .bl{color:var(--muted)}
+.bkt .bb{grid-column:1/3;position:relative;height:8px;background:var(--edge);border-radius:2px;overflow:hidden}
+.bkt .bb i{position:absolute;left:0;top:0;bottom:0;background:var(--long);border-radius:2px}
+.bkt.warn .bb i{background:var(--armed)} .bkt.binding .bb i{background:var(--short)}
+.bkt .bv{text-align:right;font-variant-numeric:tabular-nums}
+.bkt .bn{grid-column:1/3;font-size:10px}
+.bkt.binding .bl{color:var(--short)}
+.gauge{margin:10px 0 4px;padding:10px 12px;border:1px solid var(--edge);border-radius:4px;background:var(--bg)}
+.gauge .gh{display:flex;flex-wrap:wrap;gap:2px 12px;justify-content:space-between;
+  font:11px var(--mono);color:var(--muted);margin-bottom:6px}
+.gauge .gb{position:relative;height:14px;background:var(--edge);border-radius:3px;overflow:hidden}
+.gauge .gb i{position:absolute;left:0;top:0;bottom:0;background:var(--long)}
+.gauge .gb i.realized{background:var(--short)}
+.gauge.warn .gb i{background:var(--armed)} .gauge.binding .gb i{background:var(--short)}
+.gauge .gv{font:13px var(--mono);font-variant-numeric:tabular-nums}
+.sig{display:grid;grid-template-columns:56px 1fr auto;gap:3px 10px;font:12px var(--mono);
+  padding:5px 0;border-bottom:1px solid var(--edge)}
+.sig:last-child{border-bottom:none}
+.sig .sn{font-size:10px;color:var(--muted);grid-column:2/4}
+.notsize{color:var(--short);font-weight:600}
+
+/* KPI + kill criteria (FR-D11) */
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px}
+.kpi{border:1px solid var(--edge);border-radius:4px;padding:8px 10px;background:var(--bg)}
+.kpi .kl{font:10px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.kpi .kv{font:17px var(--mono);font-variant-numeric:tabular-nums;margin-top:3px}
+.kpi .kv.na{font-size:11px;color:var(--muted);line-height:1.35}
+.kpi .ks{font:10px var(--mono);color:var(--muted);margin-top:2px}
+.kill{display:grid;grid-template-columns:200px 1fr 132px 78px;gap:6px 10px;align-items:center;
+  font:12px var(--mono);padding:6px 0;border-bottom:1px solid var(--edge)}
+.kill:last-child{border-bottom:none}
+.kill .kn{color:var(--muted);font-size:10px;grid-column:1/5;margin-top:-4px}
+.st{font-size:10px;padding:2px 7px;border-radius:3px;text-align:center;letter-spacing:.05em}
+.st.OK{color:var(--long);border:1px solid var(--long)}
+.st.WARN{color:var(--armed);border:1px solid var(--armed)}
+.st.TRIGGERED{background:color-mix(in srgb,var(--short) 25%,transparent);color:var(--short);border:1px solid var(--short)}
+.st.PENDING{color:var(--idle);border:1px dashed var(--idle)}
+.kbar{position:relative;height:8px;background:var(--edge);border-radius:2px;overflow:hidden}
+.kbar i{position:absolute;top:0;bottom:0;background:var(--long)}
+.kbar i.WARN{background:var(--armed)} .kbar i.TRIGGERED{background:var(--short)} .kbar i.PENDING{background:var(--idle)}
+.kbar u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}

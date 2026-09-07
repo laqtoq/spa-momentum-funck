@@ -1,7 +1,8 @@
 import { BASELINE, presetHash } from './core/config.js';
 import { sessionState } from './core/session.js';
 import { evaluate } from './engine/signal.js';
-import { allocate, baseSize } from './engine/sizing.js';
+import { allocate, baseSize, buckets } from './engine/sizing.js';
+import { computeKpis, killCriteria, realizedPnl } from './engine/kpis.js';
 import { runway } from './engine/levels.js';
 import { monitorPosition, excursion, stopPrice, targetPrice, fmtDuration } from './engine/monitor.js';
 import { makeJournal } from './core/store.js';
@@ -15,7 +16,7 @@ import { nextEarningsMap } from './adapters/finnhub.js';
 
 const $ = s => document.querySelector(s);
 const state = { mode: 'DEMO', wl: null, data: null, cfg: BASELINE, liveHandle: null,
-  journal: null, muted: false, form: null, medianAtr: 6.9 };
+  journal: null, muted: false, form: null, medianAtr: 6.9, states: {} };
 const L = () => state.liveHandle?.state;
 const byT = t => state.wl.names.find(n => n.ticker === t);
 // Live mode runs on the wall clock; demo mode runs on the snapshot's as-of moment, so the
@@ -166,6 +167,7 @@ function renderAll() {
       <td>${d.earnCell}</td>
       <td><span class="state ${st}">${st}</span></td>`;
     if (d.result) tr.onclick = ev => { if (ev.target.dataset?.pause) return; renderDrill(n, d.result); };
+    state.states[n.ticker] = d.result;          // reused by the bucket board; avoids a second evaluate pass
     tb.appendChild(tr);
   }
   tb.querySelectorAll('[data-pause]').forEach(el => { el.onclick = ev => { ev.stopPropagation(); togglePause(el.dataset.pause); }; });
@@ -174,6 +176,7 @@ function renderAll() {
   $('#prov-ref').textContent = livePr ? `FMP DELAYED + Finnhub EOD + screen ${state.wl.screening_date}` : `DEMO SNAPSHOT · screen ${state.wl.screening_date}`;
   renderMonitor();
   renderRisk();
+  renderKpis();
 }
 
 function renderDrill(n, r) {
@@ -195,18 +198,146 @@ function renderDrill(n, r) {
     openForm({ kind: 'entry', ticker: n.ticker, dir: r.state.toLowerCase(), snapshot: r });
 }
 
+// ---- Bucket board (FR-D3) + signal sizeability (FR-D4) ----
+
+function bookForRisk() {
+  const { equity, hwm } = state.journal.equity();
+  const open = state.journal.state().open.map(p => ({
+    ticker: p.ticker, dir: p.dir, sizeFrac: p.sizeFrac,
+    beta: byT(p.ticker)?.beta_60d ?? 1, cluster: byT(p.ticker)?.cluster ?? '—' }));
+  return { equity, hwm, open };
+}
+
+const pctBar = (r, extra = '') =>
+  `<div class="bb"><i style="width:${(r.pct * 100).toFixed(1)}%" ${extra}></i></div>`;
+const level = r => r.binding ? 'binding' : r.pct >= 0.75 ? 'warn' : '';
+const num = (v, d = 2) => v == null ? '—' : v.toFixed(d);
+
 function renderRisk() {
   const cfg = state.cfg;
-  const sig = state.wl.names.find(x => x.beta_60d > 5) ?? state.wl.names[0];
-  const a = allocate({ ...cfg }, { equity: 100000, hwm: 100000, open: [] },
-    { ticker: sig.ticker, dir: sig.bias, beta: sig.beta_60d, cluster: sig.cluster, atrPct: sig.atr_pct_14d, medianAtrPct: 6.9 });
-  $('#riskbody').innerHTML = `<div class="crit">
-    <div>base</div><div>equal-risk size (r ${cfg.riskPerTrade * 100}% / stop ${cfg.stopPct}% / ${cfg.leverage}x)</div><div>${(baseSize(cfg) * 100).toFixed(2)}%</div>
-    <div>ex.</div><div>${sig.ticker} β ${sig.beta_60d} → ${a.adjustments.betaScaled ? 'scaled to β-cap' : 'full size'}</div><div>${(a.sizeFrac * 100).toFixed(2)}%</div>
-    <div>caps</div><div>concurrent ${cfg.maxConcurrent} · cluster half · β ≤ ${cfg.betaCap * 100}% · DD −${cfg.ddThrottle * 100}% → ½</div><div></div></div>
-    <div class="prov">${state.journal.state().closed.length
-      ? `${state.journal.state().closed.length} closed trade(s) journalled — KPI & kill-criteria panel lands with Module D`
-      : 'journal empty — record fills to activate KPIs & kill-criteria panel'}</div>`;
+  const book = bookForRisk();
+  const realized = realizedPnl(state.journal.state().closed, NOW());
+  const b = buckets(cfg, book, realized);
+  const eqKnown = state.journal.state().startingEquity != null;
+
+  $('#riskmeta').textContent = eqKnown
+    ? `equity ${fmtUsd(book.equity)} · full size ${(baseSize(cfg) * 100).toFixed(2)}% of equity`
+    : 'set starting equity to scale the board';
+
+  const g = b.daily;
+  const gauge = `<div class="gauge ${level(g)}">
+    <div class="gh"><span>DAILY BUDGET — limit −${cfg.dailyLossLimitPct}% (FRD 5.2)</span>
+      <span>${g.realized < 0 ? `realized ${num(g.realized)}%` : 'nothing realized'} · at stop ${num(g.atRisk)}%</span></div>
+    <div class="gb"><i style="width:${(g.pct * 100).toFixed(1)}%"></i></div>
+    <div class="gh" style="margin:6px 0 0"><span class="gv">${num(g.consumed)}% of ${cfg.dailyLossLimitPct}% committed</span>
+      <span>week ${num(b.weekly.consumed)}% of ${cfg.weeklyLossLimitPct}%${b.weekly.binding ? ' — CIRCUIT BREAKER' : ''}</span></div></div>`;
+
+  // Order matters: the grid places label and value on the first row, bar and note beneath.
+  const rows = b.rows.map(r => `<div class="bkt ${level(r)}">
+    <div class="bl">${r.label}</div>
+    <div class="bv">${r.unit === '%' ? num(r.consumed) : r.consumed}${r.unit} <span class="dim">/ ${r.limit}${r.unit}</span></div>
+    ${pctBar(r)}
+    <div class="bn dim">${r.note}</div></div>`).join('');
+
+  // FR-D4: every current signal is listed with its mechanical size, or NOT SIZEABLE and why.
+  // The signal is never hidden because it cannot be taken.
+  const sigs = state.wl.names
+    .map(n => ({ n, r: state.states[n.ticker] }))
+    .filter(x => x.r && (x.r.state === 'LONG' || x.r.state === 'SHORT'));
+  const sigRows = sigs.map(({ n, r }) => {
+    const dir = r.state.toLowerCase();
+    const a = allocate(cfg, book, { ticker: n.ticker, dir, beta: n.beta_60d, cluster: n.cluster,
+      atrPct: n.atr_pct_14d, medianAtrPct: state.medianAtr });
+    const adj = [a.adjustments.clusterHalved && 'cluster-halved', a.adjustments.betaScaled && 'scaled to β-cap',
+      a.adjustments.ddHalved && 'drawdown-throttled'].filter(Boolean).join(' · ');
+    return `<div class="sig">
+      <div class="${dir === 'long' ? 'up' : 'dn'}">${n.ticker}</div>
+      <div>${a.sizeable ? `size ${(a.sizeFrac * 100).toFixed(2)}% of equity` : `<span class="notsize">NOT SIZEABLE</span> — binding: ${a.binding.join(', ')}`}</div>
+      <div class="num">${a.sizeable && eqKnown ? fmtUsd(book.equity * a.sizeFrac * cfg.leverage) : ''}</div>
+      <div class="sn">${a.sizeable ? (adj || `full size · β ${n.beta_60d} · ${n.cluster}`)
+        : `would fit at 0% — close a position or wait for the bucket to free (FR-D4)`}</div></div>`;
+  }).join('');
+
+  $('#riskbody').innerHTML = gauge + rows +
+    `<h2 style="margin:14px 0 4px">Current signals <small>${sigs.length || 'none'}</small></h2>` +
+    (sigRows || '<div class="dim" style="font-size:12px">No LONG or SHORT signal right now.</div>');
+}
+
+// ---- KPI dashboard + kill criteria (FR-D11) ----
+
+const KPI_WHY = {
+  hitRate: 'Direct test against the 21% breakeven and the 15% kill line',
+  profitFactor: 'Overall edge, robust to hit-rate noise',
+  expectancy: 'The number the IC actually funds',
+  avgMaeWinners: 'If winners routinely draw down first, the −0.8% stop is too tight',
+  avgMfeLosers: 'If losers routinely reach +2% first, a partial-take rule deserves study',
+  stopSlippagePp: 'Feeds the kill criterion; the leverage instruments\' real cost',
+  timeInTrade: 'Tests the 3–5h horizon and the 5h time stop',
+  exposure: '% of sessions with a position open — detects overtrading',
+  sharpe: 'Annualization-free Sharpe on the per-trade return series',
+  bookBeta: 'Detects the strategy quietly becoming a leveraged index bet',
+};
+
+function kpiCell(id, label, value, sub) {
+  const why = KPI_WHY[id] ?? '';
+  const body = value == null
+    ? `<div class="kv na">n/a — ${sub}</div>`
+    : `<div class="kv">${value}</div>${sub ? `<div class="ks">${sub}</div>` : ''}`;
+  return `<div class="kpi" title="${why}"><div class="kl">${label}</div>${body}</div>`;
+}
+
+function renderKpis() {
+  const cfg = state.cfg;
+  const closed = state.journal.state().closed;
+  const spyDaily = state.mode === 'LIVE' ? L()?.spy?.daily : null;
+  const k = computeKpis(closed, { cfg, spyDaily });
+  const kill = killCriteria(closed, cfg);
+
+  $('#kpimeta').textContent = k.trades
+    ? `${k.trades} closed trade${k.trades === 1 ? '' : 's'} in the journal`
+    : 'journal empty — record an exit fill to populate';
+  $('#prov-kpi').textContent = state.mode === 'LIVE' ? 'LIVE journal' : 'DEMO journal';
+
+  $('#killstrip').innerHTML = kill.map(c => {
+    // Bar fills toward the threshold: full means the line has been reached.
+    const span = c.status === 'PENDING' || c.value == null ? 0
+      : c.higherIsSafer ? Math.min(1, Math.max(0, 1 - (c.value - c.threshold) / (100 - c.threshold)))
+                        : Math.min(1, Math.max(0, c.value / c.threshold));
+    return `<div class="kill">
+      <div>${c.label}</div>
+      <div class="kbar"><i class="${c.status}" style="width:${(span * 100).toFixed(0)}%"></i><u style="left:100%"></u></div>
+      <div class="num">${c.value == null ? '—' : num(c.value, c.unit === 'pp' ? 3 : c.unit === '%' ? 1 : 0) + c.unit}
+        <span class="dim">/ ${c.threshold}${c.unit}</span></div>
+      <div><span class="st ${c.status}">${c.status}</span></div>
+      <div class="kn">${c.note}${c.distance != null && c.status !== 'PENDING'
+        ? ` · ${c.distance >= 0 ? Math.abs(c.distance).toFixed(c.unit === 'pp' ? 3 : c.unit === '%' ? 1 : 0) + c.unit + ' of room' : 'past the line'}` : ''}</div>
+    </div>`;
+  }).join('');
+
+  const pct = v => v == null ? null : (v * 100).toFixed(1) + '%';
+  const pp = v => v == null ? null : (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+  $('#kpibody').innerHTML = `<div class="kgrid">
+    ${kpiCell('hitRate', `Hit rate (last ${k.hitRateWindow ?? cfg.killHitRateWindow})`,
+      pct(k.hitRate), k.hitRate == null ? k.na.all : 'breakeven ≈21%')}
+    ${kpiCell('profitFactor', 'Profit factor', k.profitFactor?.toFixed(2),
+      k.profitFactor == null ? (k.na.profitFactor ?? k.na.all) : 'gross wins ÷ gross losses')}
+    ${kpiCell('expectancy', 'Expectancy / trade', pp(k.expectancy),
+      k.expectancy == null ? k.na.all : `of equity · avg win ${pp(k.avgWin) ?? '—'} / loss ${pp(k.avgLoss) ?? '—'}`)}
+    ${kpiCell('avgMaeWinners', 'Avg MAE (winners)', k.avgMaeWinners == null ? null : k.avgMaeWinners.toFixed(2) + 'pp',
+      k.avgMaeWinners == null ? (k.na.avgMaeWinners ?? k.na.all) : `stop sits at ${cfg.stopPct}pp`)}
+    ${kpiCell('avgMfeLosers', 'Avg MFE (losers)', k.avgMfeLosers == null ? null : k.avgMfeLosers.toFixed(2) + 'pp',
+      k.avgMfeLosers == null ? (k.na.avgMfeLosers ?? k.na.all) : `target sits at ${cfg.targetPct}pp`)}
+    ${kpiCell('stopSlippagePp', 'Stop slippage', k.stopSlippagePp == null ? null : k.stopSlippagePp.toFixed(3) + 'pp',
+      k.stopSlippagePp == null ? (k.na.stopSlippagePp ?? k.na.all) : `over ${k.stopCount} stop${k.stopCount === 1 ? '' : 's'} · kill at ${cfg.killSlippagePp}pp`)}
+    ${kpiCell('timeInTrade', 'Time in trade', k.timeInTrade == null ? null : fmtDuration(k.timeInTrade.medianMin),
+      k.timeInTrade == null ? k.na.all : `median · max ${fmtDuration(k.timeInTrade.maxMin)} · time stop ${cfg.timeStopHours}h`)}
+    ${kpiCell('exposure', 'Exposure', k.exposure == null ? null : (k.exposure.pct * 100).toFixed(0) + '%',
+      k.exposure == null ? k.na.all : `${k.exposure.activeDays}/${k.exposure.sessionDays} sessions with a position`)}
+    ${kpiCell('sharpe', 'Rolling Sharpe', k.sharpe?.toFixed(2),
+      k.sharpe == null ? (k.na.sharpe ?? k.na.all) : `per-trade, annualization-free`)}
+    ${kpiCell('bookBeta', 'Realized book beta', k.bookBeta?.toFixed(2),
+      k.bookBeta == null ? (k.na.bookBeta ?? k.na.all) : 'daily P&L vs SPY')}
+  </div>`;
 }
 
 // ---- Position monitor (FR-A16) + fill capture (FR-D7/D8/D9) ----

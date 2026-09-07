@@ -1,4 +1,5 @@
 // Trade journal (FRD FR-D7..D12): localStorage persistence + JSON/CSV export. Storage injectable for tests.
+import { computeKpis, killCriteria, realizedPnl } from '../engine/kpis.js';
 export function makeJournal(storage) {
   const KEY = 'mr_journal_v1';
   const load = () => JSON.parse(storage.getItem(KEY) || '{"startingEquity":null,"open":[],"closed":[]}');
@@ -21,11 +22,11 @@ export function makeJournal(storage) {
       const eq = base + pnl;
       const hwm = j.closed.reduce((m, t, i) => { const partial = base + j.closed.slice(0, i + 1).reduce((s, x) => s + base * (x.sizeFrac ?? 0) * x.leveredPct / 100, 0); return Math.max(m, partial); }, base);
       return { equity: eq, hwm }; },
-    kpis() { const c = load().closed; const last30 = c.slice(-30);
-      const wins = last30.filter(t => t.underlyingPct > 0);
-      return { trades: c.length, hitRate30: last30.length ? wins.length / last30.length : null,
-               profitFactor: (() => { const g = c.filter(t=>t.leveredPct>0).reduce((s,t)=>s+t.leveredPct,0); const l = -c.filter(t=>t.leveredPct<0).reduce((s,t)=>s+t.leveredPct,0); return l > 0 ? g/l : null; })(),
-               avgMaeWinners: wins.length ? wins.reduce((s,t)=>s+t.mae,0)/wins.length : null }; },
+    // Measurement lives in the engine (FRD 5.5); the journal only supplies the trades.
+    // hitRate30 is kept as an alias so existing callers and tests read the same number.
+    kpis(cfg) { const k = computeKpis(load().closed, { cfg }); return { ...k, hitRate30: k.hitRate }; },
+    killCriteria(cfg) { return killCriteria(load().closed, cfg); },
+    realized(cfg, now) { return realizedPnl(load().closed, now); },
     exportJSON() { return JSON.stringify(load(), null, 2); },
     exportCSV() { const c = load().closed;
       const cols = ['ticker','dir','entryTs','entryPrice','exitTs','exitPrice','exitReason','sizeFrac','underlyingPct','leveredPct','mae','mfe'];

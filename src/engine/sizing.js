@@ -30,3 +30,57 @@ export function allocate(cfg, book, signal) {
   return { sizeFrac: binding.length ? 0 : frac, sizeable: binding.length === 0,
            binding, adjustments: { clusterHalved, betaScaled, ddHalved } };
 }
+
+// ---- Bucket board (FR-D3). Consumed vs available for every FRD 5.6 bucket. Pure. ----
+// book: {equity, hwm, open:[{ticker,dir,sizeFrac,beta,cluster}]}
+// realized: {today, week} as % of equity, signed (losses negative) — from the journal, FRD 5.2.
+export function buckets(cfg, book, realized = { today: 0, week: 0 }) {
+  const open = book.open ?? [];
+  const notional = f => f * cfg.leverage;
+  // `bindsAt` defaults to the cap, but the cluster rule is not breached by reaching its cap:
+  // one full-size position per cluster is exactly what it permits (FRD 5.6).
+  const row = (id, label, consumed, limit, unit, note, bindsAt = limit) => ({
+    id, label, consumed, limit, unit, note,
+    pct: limit > 0 ? Math.min(1, Math.abs(consumed) / limit) : 0,
+    binding: Math.abs(consumed) >= bindsAt - 1e-9,
+  });
+
+  // Risk actually at stop, not a count of positions: a beta-scaled position consumes less.
+  const riskAtStop = open.reduce((s, p) => s + p.sizeFrac * (cfg.stopPct / 100) * cfg.leverage, 0) * 100;
+  const perTradeCap = cfg.riskPerTrade * 100 * cfg.maxConcurrent;
+
+  const clusters = {};
+  for (const p of open) clusters[p.cluster] = (clusters[p.cluster] ?? 0) + 1;
+  const worstCluster = Object.entries(clusters).sort((a, b) => b[1] - a[1])[0];
+
+  const longs = open.filter(p => p.dir === 'long').length;
+  const shorts = open.length - longs;
+  const betaExp = Math.abs(open.reduce((s, p) => s + notional(p.sizeFrac) * p.beta * (p.dir === 'long' ? 1 : -1), 0));
+  const ddPct = book.hwm > 0 ? (book.hwm - book.equity) / book.hwm * 100 : 0;
+
+  // The daily gauge counts realized loss plus what is still exposed at stop: a book fully
+  // committed to two stops is not "0% used" just because nothing has closed yet.
+  const dailyUsed = Math.max(0, -realized.today) + riskAtStop;
+
+  return {
+    rows: [
+      row('risk', 'Risk at stop', riskAtStop, perTradeCap, '%',
+          `${open.length} open × ${cfg.riskPerTrade * 100}% per trade`),
+      row('concurrent', 'Concurrent positions', open.length, cfg.maxConcurrent, '',
+          'attention and correlation control'),
+      row('cluster', 'Largest cluster', worstCluster?.[1] ?? 0, 1, '',
+          worstCluster ? `${worstCluster[0]}${worstCluster[1] > 1 ? ' — second at half size' : ' — one full-size position permitted'}` : 'none open',
+          2),
+      row('direction', 'Direction (net)', Math.max(longs, shorts), cfg.maxPerDirection, '',
+          `${longs}L / ${shorts}S`),
+      row('beta', 'Beta-weighted exposure', betaExp * 100, cfg.betaCap * 100, '%',
+          'Σ notional × β × direction'),
+      row('drawdown', 'Drawdown throttle', Math.max(0, ddPct), cfg.ddThrottle * 100, '%',
+          ddPct >= cfg.ddThrottle * 100 ? 'ACTIVE — new positions at half size' : 'below high-water mark'),
+    ],
+    daily: { ...row('daily', 'Daily budget', dailyUsed, cfg.dailyLossLimitPct, '%', 'realized loss + open risk at stop'),
+             realized: realized.today, atRisk: riskAtStop },
+    weekly: row('weekly', 'Weekly circuit breaker', Math.max(0, -realized.week), cfg.weeklyLossLimitPct, '%',
+                'written review before resumption'),
+  };
+}

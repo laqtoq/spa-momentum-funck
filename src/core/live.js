@@ -155,7 +155,8 @@ export function startLive({ keys, watchlist, cfg }, deps, onUpdate = () => {}) {
       state.spy.price = rq.spy.price; state.spy.changePct = rq.spy.changePct; state.vix = rq.vix; }
     catch (e) { state.errors.regime = String(e.message ?? e); }
     try { const { value: d } = await queue.schedule('spy1d', 3600e3, () => tdBars('SPY', '1day', 21, keys.td));
-      state.spy.ma20 = d.slice(-20).reduce((s, b) => s + b.c, 0) / 20; }
+      state.spy.ma20 = d.slice(-20).reduce((s, b) => s + b.c, 0) / 20;
+      state.spy.daily = d; }        // kept for the realized-book-beta KPI (FRD 5.5, FR-D11)
     catch (e) { state.errors.spyMa = String(e.message ?? e); }
     reeval(); emit('regime');
   })();

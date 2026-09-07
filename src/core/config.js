@@ -11,6 +11,11 @@ export const BASELINE = {
   alertProximityPct: 0.25, alertTimeMin: 15,
   riskPerTrade: 0.015, leverage: 10, maxConcurrent: 2, maxPerDirection: 2,
   clusterSecondHalf: true, betaCap: 4.5, ddThrottle: 0.04, atrScaled: false,
+  // Account-level limits (FRD 5.2) and strategy kill criteria (FRD 5.3) — quoted in the FRD
+  // and enforced by the operator, so they belong here with every other threshold, not in the UI.
+  dailyLossLimitPct: 3, weeklyLossLimitPct: 6, maxCapitalPerPositionPct: 20,
+  killHitRate: 0.15, killHitRateWindow: 30,
+  killSlippagePp: 0.15, killSlippageWindow: 20, killConsecutiveDailyLimits: 3,
 };
 // FNV-1a over canonical (sorted-key) JSON → 8-hex preset id, stable across sessions/machines.
 export function presetHash(cfg) {
