@@ -1,6 +1,6 @@
 # Momentum with Runway — Signal Desk (Repo 3 extension)
 
-Implements FRD v1.7, Module A complete. Runs in DEMO mode with no keys (canned data);
+Implements FRD v1.8. All four modules built: A live desk, B point-in-time simulator, C configuration workbench, D allocator & journal. Runs in DEMO mode with no keys (canned data);
 enter free-tier keys in the app to go live.
 
 ## Quick start
@@ -24,7 +24,9 @@ pivot recorded as FRD compromise C9.)
 - `public/watchlist.json`, `public/key_dates.json` — versioned screen outputs (FR-A14)
 
 ## Status
-- [x] Engine (20 tests) · [x] Core (5 tests) · [x] Adapters (9 tests) · [x] Live orchestrator (12 tests) · [x] Monitor (9 tests) · [x] Buckets (9 tests) · [x] KPIs (13 tests) · [x] Simulator (22 tests) · [x] Presets & log (16 tests) · [x] Batch (9 tests) · [x] Staged demo (6 tests) · [x] Vite build
+- **137 tests**, per suite: engine 15 · indicators 5 · core 7 · adapters 9 · live orchestrator 12 · monitor 9 ·
+  buckets 11 · KPIs 13 · simulator 12 · sim orchestrator 10 · staged demo 9 · presets & log 16 · batch 9
+- [x] Vite build · [x] GitHub Pages deploy green
 - [x] Provider pivot (FRD v1.6, C9) · [x] Spike v2 passed with real keys (2026-08-04)
 - [x] Live wiring behind keys (FR-A15–A18; market-hours click-through pending)
 - [x] Position monitor + fill capture (FR-A16, FR-D7–D10) · [x] Bucket board + KPI & kill-criteria panel (FR-D3/D4/D11)

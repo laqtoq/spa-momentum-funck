@@ -70,3 +70,14 @@ Browser pass against the FRD's Module C completion criterion, in order:
 **Demo providers made date-aware** so a five-date batch is not five identical rows: outcomes now vary deterministically per (ticker, date), while the canonical `DEMO_SIM.date` keeps its staged WIN / LOSS / TIME-OUT trio so the existing Module B tests still pin real behaviour.
 
 **One FR-C1 item deliberately not implemented:** relative-volume *slot length*. The 5-minute slot is structural — it is the bar resolution the baseline is built from, not a configuration value — and exposing it would imply the engine can re-bucket history, which it cannot. Recorded here rather than silently dropped.
+
+## Follow-up fixes (2026-09-07, from review feedback)
+
+Four items raised against the codebase, all confirmed before changing anything:
+
+1. **FRD header stale** — version field read 1.6 and the author was an unfilled `[Your name]` placeholder while the change log was at v1.7. Header now reads v1.8 with the author filled in (the syllabus requires names in the document).
+2. **FRD §3.2 described the screen as it was planned, not as it ran.** The funnel text said "in R" — the 2026-08-04 run was Python (yfinance, keyless), and the R port is still an open item. It also listed FMP biggest-gainers as a funnel source, which the C9 spike had already ruled out: FMP's free tier is symbol-restricted for post-Aug-2025 keys. The run used ApeWisdom alone. Both corrected, with a v1.8 change-log entry recording that no requirement changed — these were descriptive sections that had drifted from the delivered artefacts.
+3. **README opener and tallies stale** — still claimed "Module A complete" after all four modules shipped, and the per-suite counts had drifted (core 5→7, demo 6→9). Replaced with a measured per-suite list that sums to the stated total, so the two can no longer disagree silently.
+4. **The bucket board offered a dust-sized position in a name already held** — reported as `DELL 0.00% of equity · $93`. Reproduced and root-caused: the fill form records size to two decimals, so a book that fills the beta cap leaves 0.00027 of headroom behind, and `allocate()` scaled into it — a position risking **0.000075% of equity against a 1.5% unit**. Two independent defects, both fixed with tests:
+   - `allocate()` now reports NOT SIZEABLE when the fitted size risks less than a tenth of the risk unit. `MIN_RISK_SHARE` is a guard against rounding dust, not a strategy knob, so it is a named constant rather than a config parameter — adding it to `BASELINE` would move every preset hash for a numerical-noise fix.
+   - the current-signals list now shows a held name as *already in the book*, with its size, rather than sizing it again. A second position in one ticker is the doubled bet the cluster rule exists to prevent.

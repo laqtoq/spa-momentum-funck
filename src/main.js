@@ -255,6 +255,14 @@ function renderRisk() {
     .filter(x => x.r && (x.r.state === 'LONG' || x.r.state === 'SHORT'));
   const sigRows = sigs.map(({ n, r }) => {
     const dir = r.state.toLowerCase();
+    // A name already in the book is not a fresh allocation question — the position monitor owns it.
+    // Sizing it again invites a second position in one ticker, which is the doubled bet the
+    // cluster rule exists to prevent.
+    const held = book.open.find(p => p.ticker === n.ticker);
+    if (held) return `<div class="sig">
+      <div class="${dir === 'long' ? 'up' : 'dn'}">${n.ticker}</div>
+      <div class="dim">already in the book at ${(held.sizeFrac * 100).toFixed(2)}% — see the position monitor</div>
+      <div></div><div class="sn">signal still ${r.state}; no second position in one name</div></div>`;
     const a = allocate(cfg, book, { ticker: n.ticker, dir, beta: n.beta_60d, cluster: n.cluster,
       atrPct: n.atr_pct_14d, medianAtrPct: state.medianAtr });
     const adj = [a.adjustments.clusterHalved && 'cluster-halved', a.adjustments.betaScaled && 'scaled to β-cap',

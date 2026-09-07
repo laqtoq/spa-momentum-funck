@@ -12,7 +12,7 @@ Last updated: 2026-09-07 · Prepared in the claude.ai project where all design w
 **Deadline: not yet fixed — VERIFY WITH THE INSTRUCTOR.** The course syllabus (`EA_Syllabus_genAI_finance_2026_UPDATED.docx`, Post-Module section, re-read 2026-09-07) states verbatim: *"Deadline: TBD. Submit as SURNAME_POST.pdf. Include your names in the document. GitHub repository links must be live and public at time of submission."* Earlier versions of this document asserted "Monday, August 31, 2026, 09:00 CEST" with a protected buffer week from Aug 25 — **that date appears nowhere in the syllabus and was an assumption that hardened into a documented fact.** It is corrected here rather than carried forward. Confirm the real date on Moodle before planning the remaining phases. All work is checked for plagiarism and AI fingerprints; AI-drafted written work must be human-edited and accompanied by full AI conversation exports.
 
 **Graded deliverables (40% of course grade):**
-1. Functional Requirements Document — exists as `docs/FRD.md` (v1.7), needs human editing pass
+1. Functional Requirements Document — exists as `docs/FRD.md` (v1.8), needs human editing pass
 2. Portfolio Construction — done: 20-name screened watchlist (`public/watchlist.json`)
 3. Portfolio Dashboard — this repo; vibe-coded SPA, published via GitHub Pages
 4. Executive Summary (1 page) — not started
@@ -39,7 +39,7 @@ Original design covered **DAX 40 + S&P 500**; the DAX leg is **deferred (not aba
 
 | File | Role |
 |---|---|
-| `docs/FRD.md` | **The spec. v1.7.** Every FR/NFR ID referenced in code and commits comes from here. It has a change log (§11) — every design change goes through it. |
+| `docs/FRD.md` | **The spec. v1.8.** Every FR/NFR ID referenced in code and commits comes from here. It has a change log (§11) — every design change goes through it. |
 | `docs/screen_report.md` | First screening run (2026-08-04): filter distributions, the three findings that produced FRD v1.5 |
 | `public/watchlist.json` | The screened 20 names + bias tags + correlation clusters + 60d betas + thresholds used. Versioned config per FR-A14. Refresh monthly. |
 | `public/key_dates.json` | FOMC dates (Sep 16, Oct 28, Dec 9 2026 confirmed); CPI dates still TO VERIFY; earnings come live from FMP |
@@ -59,7 +59,7 @@ If `docs/FRD.md` is missing, it was delivered as `FRD_momentum_runway.md` alongs
 
 ## 5. Current build state (verified 2026-09-07)
 
-**Tests: 135/135 green.** Run: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/engine/monitor.test.js test/engine/buckets.test.js test/engine/kpis.test.js test/engine/simulate.test.js test/adapters.test.js test/live.test.js test/sim.test.js test/demo.test.js test/presets.test.js test/batch.test.js` (do NOT pass a bare directory to `node --test` — it miscounts, see §10). `npm run build` green (~86 kB JS / 31 kB gzip).
+**Tests: 137/137 green.** Run: `node --test test/core.test.js test/engine/engine.test.js test/engine/indicators.test.js test/engine/monitor.test.js test/engine/buckets.test.js test/engine/kpis.test.js test/engine/simulate.test.js test/adapters.test.js test/live.test.js test/sim.test.js test/demo.test.js test/presets.test.js test/batch.test.js` (do NOT pass a bare directory to `node --test` — it miscounts, see §10). `npm run build` green (~86 kB JS / 31 kB gzip).
 
 Done: signal engine (indicators cross-verified vs Python fixtures; levels/runway; evaluate() with per-criterion toggles; walker w/ conservative same-bar rule + MAE/MFE; full sizing/bucket logic) · core (config+FNV-1a preset hash, CET session clock, throttle queue w/ budget meter, deterministic tick aggregator, localStorage trade journal w/ KPIs & CSV/JSON round-trip) · adapters (Alpaca IEX WS, Twelve Data bars+quotes, FMP regime, Finnhub REST earnings, news env-switch, Riskline, OpenRouter CO-STAR, demo) · **demo mode**: app boots keyless on a staged snapshot and demonstrates LONG/ARMED/IDLE through the real engine (see D9 below) · **live wiring (FR-A15/A17/A1/A2/A5/A7/A8/A9/A18)**: `src/core/live.js` orchestrator (all I/O behind injected deps, 9 tests) — stream→per-symbol aggregators→engine, chunked TD quotes, SPY 20-DMA, per-symbol earnings + blackout pause defaults w/ explicit override confirm, reconnect backfill + VWAP reseed, provenance labels, budget meter · UI: mode-aware overview/drill-down/header · `public/spike.html` v2 verification page. **Live mode verified headless (tests) + keyless guard in browser; full click-through with real keys during market hours still pending (next session 15:30–22:00 CET) — expect states to fill over ~8 min (3 TD calls/name through the 8/min queue).
 

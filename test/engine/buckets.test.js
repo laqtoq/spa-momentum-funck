@@ -107,3 +107,28 @@ test('buckets: a profitable day does not credit the daily budget', () => {
   assert.equal(b.daily.consumed, 0);
   assert.equal(b.weekly.consumed, 0);
 });
+
+// Recorded fills are rounded to two decimals, so a book that fills the beta cap leaves a sliver
+// of headroom behind. Scaling into it produced a "position" of $10 risking 0.000075% of equity.
+test('allocate: rounding dust in the beta cap is NOT SIZEABLE, not a $10 position', () => {
+  const book = { equity: 104670, hwm: 104670,
+    open: [pos('DELL', 'long', 0.1557, 2.89, 'C1')] };        // 15.57% as the fill form records it
+  const a = allocate(cfg, book, { ticker: 'DELL', dir: 'long', beta: 2.89, cluster: 'C1',
+    atrPct: 7.56, medianAtrPct: 6.9 });
+  assert.equal(a.sizeable, false, 'a fit worth 0.000075% of risk is not a position');
+  assert.deepEqual(a.binding, ['betaExposure']);
+  assert.equal(a.sizeFrac, 0);
+});
+
+test('allocate: a genuinely partial fit still scales rather than being refused', () => {
+  // half the cap consumed → a real, takeable remainder
+  const book = { equity: 1e5, hwm: 1e5, open: [pos('HUM', 'long', full, 1.2, 'C4')] };
+  const a = allocate(cfg, book, { ticker: 'COIN', dir: 'long', beta: 2.0, cluster: 'C5',
+    atrPct: 7, medianAtrPct: 7 });
+  assert.equal(a.sizeable, true);
+  assert.equal(a.adjustments.betaScaled, true);
+  assert.ok(a.sizeFrac > 0.02, `scaled to ${a.sizeFrac}, expected a meaningful size`);
+  // and the resulting book sits exactly on the cap
+  const b = buckets(cfg, { ...book, open: [...book.open, pos('COIN', 'long', a.sizeFrac, 2.0, 'C5')] });
+  near(rowOf(b, 'beta').consumed, 450, 1e-6);
+});
